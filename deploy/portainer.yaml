@@ -1,0 +1,134 @@
+networks:
+  internal:
+    driver: overlay
+  traefik_public:
+    external: true
+
+volumes:
+  postgres_data:
+  ezbookkeeping_storage:
+
+secrets:
+  azure_storage_account:
+    external: true
+  azure_storage_key:
+    external: true
+  ezbookkeeping_postgres_password:
+    external: true
+  ezbookkeeping_secret_key:
+    external: true
+
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_DB: ezbookkeeping
+      POSTGRES_USER: ezbookkeeping
+      POSTGRES_PASSWORD_FILE: /run/secrets/ezbookkeeping_postgres_password
+    secrets:
+      - ezbookkeeping_postgres_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ezbookkeeping -d ezbookkeeping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+
+  ezbookkeeping:
+    image: ghcr.io/as206em/ezbookkeeping:latest
+    entrypoint:
+      - /bin/sh
+      - -ec
+      - |
+        secret_key="$$(cat /run/secrets/ezbookkeeping_secret_key)"
+        postgres_password="$$(cat /run/secrets/ezbookkeeping_postgres_password)"
+        awk -v secret_key="$$secret_key" -v postgres_password="$$postgres_password" '
+          /^\[server\]$$/ { section = "server" }
+          /^\[database\]$$/ { section = "database" }
+          /^\[log\]$$/ { section = "log" }
+          /^\[security\]$$/ { section = "security" }
+          /^\[/ && $$0 != "[server]" && $$0 != "[database]" && $$0 != "[log]" && $$0 != "[security]" { section = "" }
+          section == "server" && /^domain =/ { $$0 = "domain = fi.asem-mkl.com" }
+          section == "server" && /^root_url =/ { $$0 = "root_url = https://fi.asem-mkl.com/" }
+          section == "database" && /^type =/ { $$0 = "type = postgres" }
+          section == "database" && /^host =/ { $$0 = "host = postgres:5432" }
+          section == "database" && /^name =/ { $$0 = "name = ezbookkeeping" }
+          section == "database" && /^user =/ { $$0 = "user = ezbookkeeping" }
+          section == "database" && /^passwd =/ { $$0 = "passwd = " postgres_password }
+          section == "log" && /^mode =/ { $$0 = "mode = console" }
+          section == "security" && /^secret_key =/ { $$0 = "secret_key = " secret_key }
+          { print }
+        ' /ezbookkeeping/conf/ezbookkeeping.ini > /tmp/ezbookkeeping.ini
+        exec /ezbookkeeping/ezbookkeeping server run --conf-path=/tmp/ezbookkeeping.ini
+    secrets:
+      - ezbookkeeping_postgres_password
+      - ezbookkeeping_secret_key
+    volumes:
+      - ezbookkeeping_storage:/ezbookkeeping/storage
+    networks:
+      - internal
+      - traefik_public
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--output-document=-", "http://127.0.0.1:8080/healthz.json"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      update_config:
+        parallelism: 1
+        order: stop-first
+      rollback_config:
+        parallelism: 1
+        order: stop-first
+      labels:
+        - traefik.enable=true
+        - traefik.docker.network=traefik_public
+        - traefik.http.routers.ezbookkeeping-fi.rule=Host(`fi.asem-mkl.com`)
+        - traefik.http.routers.ezbookkeeping-fi.entrypoints=web,websecure
+        - traefik.http.routers.ezbookkeeping-fi.tls.certresolver=letsencrypt
+        - traefik.http.services.ezbookkeeping-fi.loadbalancer.server.port=8080
+
+  backup:
+    image: ghcr.io/tashfier/swarm-maintenance:latest
+    entrypoint:
+      - sh
+      - -c
+      - >
+        export PGPASSWORD="$$(cat /run/secrets/ezbookkeeping_postgres_password)" &&
+        export AZURE_STORAGE_ACCOUNT="$$(cat /run/secrets/azure_storage_account)" &&
+        export AZURE_STORAGE_KEY="$$(cat /run/secrets/azure_storage_key)" &&
+        exec /app/backup-postgres-to-azure.sh cron
+    environment:
+      ENABLE_POSTGRES: "true"
+      ENABLE_MONGO: "false"
+      ENABLE_VOLUMES: "false"
+      POSTGRES_HOST: postgres
+      POSTGRES_PORT: "5432"
+      POSTGRES_DB: ezbookkeeping
+      POSTGRES_USER: ezbookkeeping
+      POSTGRES_BACKUP_PREFIX: ezbookkeeping-db
+      AZURE_STORAGE_CONTAINER: backups
+      AZURE_BLOB_PREFIX: ezbookkeeping
+      BACKUP_CRON_SCHEDULE: "0 2,14 * * *"
+    networks:
+      - internal
+    secrets:
+      - ezbookkeeping_postgres_password
+      - azure_storage_account
+      - azure_storage_key
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
