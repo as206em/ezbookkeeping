@@ -43,7 +43,7 @@ services:
         condition: on-failure
 
   ezbookkeeping:
-    image: ghcr.io/as206em/ezbookkeeping:latest
+    image: ghcr.io/as206em/ezbookkeeping:sha-5b65bc98ec9379232ca0351d15fe145fb1b4e114
     entrypoint:
       - /bin/sh
       - -ec
