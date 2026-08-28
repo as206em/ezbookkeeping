@@ -17,6 +17,10 @@ secrets:
     external: true
   ezbookkeeping_secret_key:
     external: true
+  ezbookkeeping_openai_api_key:
+    external: true
+  ezbookkeeping_bank_sms_api_key:
+    external: true
 
 services:
   postgres:
@@ -44,18 +48,25 @@ services:
 
   ezbookkeeping:
     image: ghcr.io/as206em/ezbookkeeping:sha-fcf9b6294c479e11a631cff5110703d1bec637d7
+    environment:
+      EBK_EXCHANGE_RATES_DATA_SOURCE: central_bank_of_uzbekistan
     entrypoint:
       - /bin/sh
       - -ec
       - |
         secret_key="$$(cat /run/secrets/ezbookkeeping_secret_key)"
         postgres_password="$$(cat /run/secrets/ezbookkeeping_postgres_password)"
-        awk -v secret_key="$$secret_key" -v postgres_password="$$postgres_password" '
+        openai_api_key="$$(cat /run/secrets/ezbookkeeping_openai_api_key)"
+        bank_sms_api_key="$$(cat /run/secrets/ezbookkeeping_bank_sms_api_key)"
+        awk -v secret_key="$$secret_key" -v postgres_password="$$postgres_password" -v openai_api_key="$$openai_api_key" -v bank_sms_api_key="$$bank_sms_api_key" '
           /^\[server\]$$/ { section = "server" }
           /^\[database\]$$/ { section = "database" }
           /^\[log\]$$/ { section = "log" }
           /^\[security\]$$/ { section = "security" }
-          /^\[/ && $$0 != "[server]" && $$0 != "[database]" && $$0 != "[log]" && $$0 != "[security]" { section = "" }
+          /^\[llm\]$$/ { section = "llm" }
+          /^\[llm_text_recognition\]$$/ { section = "llm_text_recognition" }
+          /^\[bank_message\]$$/ { section = "bank_message" }
+          /^\[/ && $$0 != "[server]" && $$0 != "[database]" && $$0 != "[log]" && $$0 != "[security]" && $$0 != "[llm]" && $$0 != "[llm_text_recognition]" && $$0 != "[bank_message]" { section = "" }
           section == "server" && /^domain =/ { $$0 = "domain = fi.asem-mkl.com" }
           section == "server" && /^root_url =/ { $$0 = "root_url = https://fi.asem-mkl.com/" }
           section == "database" && /^type =/ { $$0 = "type = postgres" }
@@ -65,12 +76,20 @@ services:
           section == "database" && /^passwd =/ { $$0 = "passwd = " postgres_password }
           section == "log" && /^mode =/ { $$0 = "mode = console" }
           section == "security" && /^secret_key =/ { $$0 = "secret_key = " secret_key }
+          section == "llm" && /^transaction_from_ai_text_recognition =/ { $$0 = "transaction_from_ai_text_recognition = true" }
+          section == "llm_text_recognition" && /^llm_provider =/ { $$0 = "llm_provider = openai" }
+          section == "llm_text_recognition" && /^enable_thinking =/ { $$0 = "enable_thinking = low" }
+          section == "llm_text_recognition" && /^openai_api_key =/ { $$0 = "openai_api_key = " openai_api_key }
+          section == "llm_text_recognition" && /^openai_model_id =/ { $$0 = "openai_model_id = gpt-5-nano" }
+          section == "bank_message" && /^api_key =/ { $$0 = "api_key = " bank_sms_api_key }
           { print }
         ' /ezbookkeeping/conf/ezbookkeeping.ini > /tmp/ezbookkeeping.ini
         exec /ezbookkeeping/ezbookkeeping server run --conf-path=/tmp/ezbookkeeping.ini
     secrets:
       - ezbookkeeping_postgres_password
       - ezbookkeeping_secret_key
+      - ezbookkeeping_openai_api_key
+      - ezbookkeeping_bank_sms_api_key
     volumes:
       - ezbookkeeping_storage:/ezbookkeeping/storage
     networks:

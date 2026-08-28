@@ -3,6 +3,7 @@ package cron
 import (
 	"time"
 
+	"github.com/mayswind/ezbookkeeping/pkg/api"
 	"github.com/mayswind/ezbookkeeping/pkg/core"
 	"github.com/mayswind/ezbookkeeping/pkg/services"
 )
@@ -28,5 +29,17 @@ var CreateScheduledTransactionJob = &CronJob{
 	},
 	Run: func(c *core.CronContext) error {
 		return services.Transactions.CreateScheduledTransactions(c, time.Now().Unix(), c.GetInterval())
+	},
+}
+
+// ProcessBankMessageOutboxJob processes bank messages after the ingest request returns.
+var ProcessBankMessageOutboxJob = &CronJob{
+	Name:        "ProcessBankMessageOutbox",
+	Description: "Process durable bank message outbox items.",
+	Period: CronJobIntervalPeriod{
+		Interval: time.Second,
+	},
+	Run: func(c *core.CronContext) error {
+		return api.BankMessages.ProcessOutbox(c)
 	},
 }

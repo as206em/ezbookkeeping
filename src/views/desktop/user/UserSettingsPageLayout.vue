@@ -60,6 +60,12 @@
                     <span class="nav-item-title">{{ tt('Data Management') }}</span>
                 </router-link>
             </li>
+            <li class="nav-link" v-if="isBankMessageAutomationEnabled()">
+                <router-link to="/user/settings/bank_messages">
+                    <v-icon class="nav-item-icon" :icon="mdiMessageTextOutline"/>
+                    <span class="nav-item-title">Bank SMS Automation</span>
+                </router-link>
+            </li>
         </template>
 
         <template #content>
@@ -74,7 +80,7 @@ import { useRoute } from 'vue-router';
 
 import { useI18n } from '@/locales/helpers.ts';
 
-import { isUserCustomIconEnabled, isUserScheduledTransactionEnabled } from '@/lib/server_settings.ts';
+import { isBankMessageAutomationEnabled, isUserCustomIconEnabled, isUserScheduledTransactionEnabled } from '@/lib/server_settings.ts';
 
 import {
     mdiAccountOutline,
@@ -85,7 +91,8 @@ import {
     mdiShapePlusOutline,
     mdiLockOpenOutline,
     mdiOnepassword,
-    mdiDatabaseCogOutline
+    mdiDatabaseCogOutline,
+    mdiMessageTextOutline
 } from '@mdi/js';
 
 const route = useRoute();

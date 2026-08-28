@@ -36,6 +36,7 @@ import UserBasicSettingPage from '@/views/desktop/user/UserBasicSettingPage.vue'
 import UserSecuritySettingPage from '@/views/desktop/user/UserSecuritySettingPage.vue';
 import UserTwoFactorAuthSettingPage from '@/views/desktop/user/UserTwoFactorAuthSettingPage.vue';
 import UserDataManagementSettingPage from '@/views/desktop/user/UserDataManagementSettingPage.vue';
+import UserBankMessageSettingPage from '@/views/desktop/user/UserBankMessageSettingPage.vue';
 
 import AppSettingsPageLayout from '@/views/desktop/app/AppSettingsPageLayout.vue';
 import AppBasicSettingPage from '@/views/desktop/app/AppBasicSettingPage.vue';
@@ -218,6 +219,11 @@ const router = createRouter({
                 {
                     path: '/user/settings/data_management',
                     component: UserDataManagementSettingPage,
+                    beforeEnter: checkLogin
+                },
+                {
+                    path: '/user/settings/bank_messages',
+                    component: UserBankMessageSettingPage,
                     beforeEnter: checkLogin
                 }
             ]

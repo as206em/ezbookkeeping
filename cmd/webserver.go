@@ -333,6 +333,14 @@ func startWebServer(c *core.CliContext) error {
 
 		apiRoute.GET("/logout.json", bindApiWithTokenUpdate(api.Tokens.TokenRevokeCurrentHandler, config))
 
+		if config.BankMessageAPIKey != "" {
+			bankMessageRoute := apiRoute.Group("/v1/bank-messages")
+			bankMessageRoute.Use(bindMiddleware(middlewares.BankMessageAPIKeyAuthorization(config), config))
+			{
+				bankMessageRoute.POST("/transactions.json", bindApi(api.BankMessages.IngestHandler, config))
+			}
+		}
+
 		apiV1Route := apiRoute.Group("/v1")
 		apiV1Route.Use(bindMiddleware(middlewares.JWTAuthorizationByHeader(config), config))
 		apiV1Route.Use(bindMiddleware(middlewares.APITokenIpLimit(config), config))
@@ -487,6 +495,13 @@ func startWebServer(c *core.CliContext) error {
 				if config.TransactionFromAITextRecognition {
 					apiV1Route.POST("/llm/transactions/recognize_text.json", bindApi(api.LargeLanguageModels.RecognizeTransactionTextHandler, config))
 				}
+			}
+
+			if config.BankMessageAPIKey != "" {
+				apiV1Route.GET("/bank-messages/settings.json", bindApi(api.BankMessages.SettingsGetHandler, config))
+				apiV1Route.GET("/bank-messages/outbox/list.json", bindApi(api.BankMessages.OutboxListHandler, config))
+				apiV1Route.POST("/bank-messages/settings.json", bindApi(api.BankMessages.SettingsUpdateHandler, config))
+				apiV1Route.POST("/bank-messages/preview.json", bindApi(api.BankMessages.PreviewHandler, config))
 			}
 
 			if config.ReceiptImageRecognitionLLMConfig != nil && config.ReceiptImageRecognitionLLMConfig.LLMProvider != "" {

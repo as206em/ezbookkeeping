@@ -369,6 +369,9 @@ type Config struct {
 	// Large Language Model for Receipt Image Recognition
 	ReceiptImageRecognitionLLMConfig *LLMConfig
 
+	// Bank Message Automation
+	BankMessageAPIKey string
+
 	// Uuid
 	UuidGeneratorType string
 	UuidServerId      uint8
@@ -558,6 +561,12 @@ func LoadConfiguration(configFilePath string) (*Config, error) {
 		return nil, err
 	}
 
+	err = loadBankMessageConfiguration(config, cfgFile, "bank_message")
+
+	if err != nil {
+		return nil, err
+	}
+
 	err = loadUuidConfiguration(config, cfgFile, "uuid")
 
 	if err != nil {
@@ -625,6 +634,11 @@ func LoadConfiguration(configFilePath string) (*Config, error) {
 	}
 
 	return config, nil
+}
+
+func loadBankMessageConfiguration(config *Config, configFile *ini.File, sectionName string) error {
+	config.BankMessageAPIKey = getConfigItemStringValue(configFile, sectionName, "api_key")
+	return nil
 }
 
 // GetDefaultConfigFilePath returns the defaule config file path

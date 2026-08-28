@@ -194,6 +194,10 @@ func getConfigWithoutSensitiveData(config *settings.Config) *settings.Config {
 		removeSensitiveDataFromLLMConfig(clonedConfig.ReceiptImageRecognitionLLMConfig)
 	}
 
+	if clonedConfig.BankMessageAPIKey != "" {
+		clonedConfig.BankMessageAPIKey = "****"
+	}
+
 	if clonedConfig.OAuth2ClientSecret != "" {
 		clonedConfig.OAuth2ClientSecret = "****"
 	}
