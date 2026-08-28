@@ -13,6 +13,11 @@ type Database struct {
 	engineGroup  *xorm.EngineGroup
 }
 
+// Close closes all database connections.
+func (db *Database) Close() error {
+	return db.engineGroup.Close()
+}
+
 // NewSession starts a new session with the specified context
 func (db *Database) NewSession(c core.Context) *xorm.Session {
 	return db.engineGroup.Context(NewXOrmContextAdapter(c))

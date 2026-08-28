@@ -64,7 +64,7 @@ func (s *BankMessageSettingsService) Update(c core.Context, setting *models.Bank
 	setting.UpdatedUnixTime = time.Now().Unix()
 	attempts := 1
 	if setting.Enabled {
-		attempts = 3
+		attempts = 10
 	}
 
 	var err error
@@ -80,11 +80,19 @@ func (s *BankMessageSettingsService) Update(c core.Context, setting *models.Bank
 			return errs.ErrBankMessageAlreadyEnabled
 		}
 
-		if err == errs.ErrBankMessageAlreadyEnabled || attempt+1 >= attempts {
+		if err == errs.ErrBankMessageAlreadyEnabled {
 			return err
 		}
 
-		time.Sleep(time.Duration(attempt+1) * 10 * time.Millisecond)
+		if attempt+1 < attempts {
+			time.Sleep(time.Duration(attempt+1) * 20 * time.Millisecond)
+		}
+	}
+
+	guard := &models.BankMessageEnabledUser{}
+	has, guardErr := s.UserDB().NewSession(c).ID(bankMessageEnabledUserSlot).Get(guard)
+	if guardErr == nil && has && guard.Uid != setting.Uid {
+		return errs.ErrBankMessageAlreadyEnabled
 	}
 
 	return err

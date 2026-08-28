@@ -34,6 +34,9 @@ func initializeBankMessageServiceTest(t *testing.T) core.Context {
 
 	require.NoError(t, datastore.InitializeDataStore(config))
 	require.NoError(t, uuid.InitializeUuidGenerator(config))
+	t.Cleanup(func() {
+		require.NoError(t, datastore.Container.UserStore.Choose(0).Close())
+	})
 	require.NoError(t, datastore.Container.UserStore.SyncStructs(
 		new(models.BankMessageAutomationSetting),
 		new(models.BankMessageEnabledUser),
