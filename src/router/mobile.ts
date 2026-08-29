@@ -29,6 +29,7 @@ import BrowserCacheSettingPage from '@/views/mobile/settings/BrowserCacheSetting
 import AccountFilterSettingsPage from '@/views/mobile/settings/AccountFilterSettingsPage.vue';
 import CategoryFilterSettingsPage from '@/views/mobile/settings/CategoryFilterSettingsPage.vue';
 import TransactionTagFilterSettingsPage from '@/views/mobile/settings/TransactionTagFilterSettingsPage.vue';
+import BankMessageSettingsPage from '@/views/mobile/settings/BankMessageSettingsPage.vue';
 
 import SettingsPage from '@/views/mobile/SettingsPage.vue';
 import ApplicationLockPage from '@/views/mobile/ApplicationLockPage.vue';
@@ -261,6 +262,11 @@ const routes: Router.RouteParameters[] = [
     {
         path: '/settings/sync',
         async: asyncResolve(ApplicationCloudSyncSettingsPage),
+        beforeEnter: [checkLogin]
+    },
+    {
+        path: '/settings/bank_messages',
+        async: asyncResolve(BankMessageSettingsPage),
         beforeEnter: [checkLogin]
     },
     {

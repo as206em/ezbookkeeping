@@ -42,6 +42,12 @@ import type {
     AccountDeleteRequest
 } from '@/models/account.ts';
 import type {
+    BankMessageAutomationSettingRequest,
+    BankMessageAutomationSettingResponse,
+    BankMessageOutboxItem,
+    BankMessageProcessResponse
+} from '@/models/bank_message.ts';
+import type {
     AuthResponse,
     RegisterResponse
 } from '@/models/auth_response.ts';
@@ -438,6 +444,22 @@ export default {
     },
     getUserApplicationCloudSettings: (): ApiResponsePromise<ApplicationCloudSetting[] | false> => {
         return axios.get<ApiResponse<ApplicationCloudSetting[] | false>>('v1/users/settings/cloud/get.json');
+    },
+    getBankMessageSettings: (): ApiResponsePromise<BankMessageAutomationSettingResponse> => {
+        return axios.get<ApiResponse<BankMessageAutomationSettingResponse>>('v1/bank-messages/settings.json');
+    },
+    getBankMessageOutbox: (): ApiResponsePromise<BankMessageOutboxItem[]> => {
+        return axios.get<ApiResponse<BankMessageOutboxItem[]>>('v1/bank-messages/outbox/list.json');
+    },
+    updateBankMessageSettings: (req: BankMessageAutomationSettingRequest): ApiResponsePromise<BankMessageAutomationSettingResponse> => {
+        return axios.post<ApiResponse<BankMessageAutomationSettingResponse>>('v1/bank-messages/settings.json', req);
+    },
+    previewBankMessage: (text: string): ApiResponsePromise<BankMessageProcessResponse> => {
+        return axios.post<ApiResponse<BankMessageProcessResponse>>('v1/bank-messages/preview.json', {
+            text: text
+        }, {
+            timeout: DEFAULT_LLM_API_TIMEOUT
+        });
     },
     updateUserApplicationCloudSettings: (req: UserApplicationCloudSettingsUpdateRequest): ApiResponsePromise<boolean> => {
         return axios.post<ApiResponse<boolean>>('v1/users/settings/cloud/update.json', req);

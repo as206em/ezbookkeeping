@@ -165,6 +165,38 @@ func updateAllDatabaseTablesStructure(c *core.CliContext) error {
 
 	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] user application cloud settings table maintained successfully")
 
+	err = datastore.Container.UserStore.SyncStructs(new(models.BankMessageAutomationSetting))
+
+	if err != nil {
+		return err
+	}
+
+	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] bank message automation setting table maintained successfully")
+
+	err = datastore.Container.UserStore.SyncStructs(new(models.BankMessageEnabledUser))
+
+	if err != nil {
+		return err
+	}
+
+	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] bank message enabled user guard table maintained successfully")
+
+	err = datastore.Container.UserStore.SyncStructs(new(models.BankMessageOutbox))
+
+	if err != nil {
+		return err
+	}
+
+	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] bank message outbox table maintained successfully")
+
+	err = datastore.Container.UserStore.SyncStructs(new(models.BankMessageIdempotencyKey))
+
+	if err != nil {
+		return err
+	}
+
+	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] bank message idempotency key table maintained successfully")
+
 	err = datastore.Container.UserDataStore.SyncStructs(new(models.UserExternalAuth))
 
 	if err != nil {

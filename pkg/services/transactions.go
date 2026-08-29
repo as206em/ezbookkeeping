@@ -564,6 +564,27 @@ func (s *TransactionService) GetTransactionCount(c core.Context, uid int64, maxT
 
 // CreateTransaction saves a new transaction to database
 func (s *TransactionService) CreateTransaction(c core.Context, transaction *models.Transaction, tagIds []int64, pictureIds []int64) error {
+	return s.createTransaction(c, transaction, tagIds, pictureIds, 0)
+}
+
+// CreateTransactionWithId saves a new transaction using a previously reserved transaction id.
+func (s *TransactionService) CreateTransactionWithId(c core.Context, transaction *models.Transaction, tagIds []int64, pictureIds []int64, transactionId int64) error {
+	if transactionId <= 0 {
+		return errs.ErrTransactionIdInvalid
+	}
+
+	existingTransaction, err := s.GetTransactionByTransactionId(c, transaction.Uid, transactionId)
+	if err == nil {
+		*transaction = *existingTransaction
+		return nil
+	} else if err != errs.ErrTransactionNotFound {
+		return err
+	}
+
+	return s.createTransaction(c, transaction, tagIds, pictureIds, transactionId)
+}
+
+func (s *TransactionService) createTransaction(c core.Context, transaction *models.Transaction, tagIds []int64, pictureIds []int64, reservedTransactionId int64) error {
 	if transaction.Uid <= 0 {
 		return errs.ErrUserIdInvalid
 	}
@@ -579,8 +600,12 @@ func (s *TransactionService) CreateTransaction(c core.Context, transaction *mode
 
 	needTransactionUuidCount := 1
 
+	if reservedTransactionId > 0 {
+		needTransactionUuidCount = 0
+	}
+
 	if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT || transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
-		needTransactionUuidCount = 2
+		needTransactionUuidCount++
 	}
 
 	transactionUuids := s.GenerateUuids(uuid.UUID_TYPE_TRANSACTION, uint16(needTransactionUuidCount))
@@ -597,10 +622,16 @@ func (s *TransactionService) CreateTransaction(c core.Context, transaction *mode
 		return errs.ErrSystemIsBusy
 	}
 
-	transaction.TransactionId = transactionUuids[0]
+	nextTransactionUuidIndex := 0
+	if reservedTransactionId > 0 {
+		transaction.TransactionId = reservedTransactionId
+	} else {
+		transaction.TransactionId = transactionUuids[nextTransactionUuidIndex]
+		nextTransactionUuidIndex++
+	}
 
 	if transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_OUT || transaction.Type == models.TRANSACTION_DB_TYPE_TRANSFER_IN {
-		transaction.RelatedId = transactionUuids[1]
+		transaction.RelatedId = transactionUuids[nextTransactionUuidIndex]
 	}
 
 	transaction.TransactionTime = utils.GetMinTransactionTimeFromUnixTime(utils.GetUnixTimeFromTransactionTime(transaction.TransactionTime))
