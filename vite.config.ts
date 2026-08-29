@@ -16,6 +16,15 @@ const SRC_DIR = resolve(__dirname, './src');
 const PUBLIC_DIR = resolve(__dirname, './public');
 const BUILD_DIR = resolve(__dirname, './dist',);
 
+function appendServerSettingsCacheKey(): Plugin {
+    return {
+        name: 'append-server-settings-cache-key',
+        transformIndexHtml(html: string): string {
+            return html.replace('./server_settings.js', `./server_settings.js?v=${git.short()}`);
+        }
+    };
+}
+
 function injectFramework7CssFile({ htmlFileName, placeHolders }: { htmlFileName: string, placeHolders: { name: string, srcFileName: string, distFileNamePrefix: string }[] }): Plugin[] {
     return [
         {
@@ -81,6 +90,7 @@ export default defineConfig(() => {
             __EZBOOKKEEPING_THIRD_PARTY_LICENSES__: JSON.stringify(thirdPartyLicenseFile)
         },
         plugins: [
+            appendServerSettingsCacheKey(),
             vue({
                 template: {
                     compilerOptions: {
