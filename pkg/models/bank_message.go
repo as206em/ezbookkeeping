@@ -19,8 +19,7 @@ Categorize it for personal finance tracking.
 Remarks must be a few words describing what the payment was for; use "Other" when uncertain.
 Use only facts in the message. Do not invent a merchant, account, amount, currency, or time.
 Normalize the merchant name by removing locations and legal suffixes such as LLC.
-Etisalat is an internet provider, Salik is a road toll, and ADNOC is normally fuel.
-A declined, reversed, cancelled, pending, or failed transaction is not completed.`
+Etisalat is an internet provider, Salik is a road toll, and ADNOC is normally fuel.`
 
 // BankMessageAccountMapping maps text present in a bank message to an account.
 type BankMessageAccountMapping struct {
@@ -134,14 +133,13 @@ type BankMessageAcceptedResponse struct {
 
 // RecognizedBankMessage is the strict structured result requested from the LLM.
 type RecognizedBankMessage struct {
-	Amount                      string `json:"amount" jsonschema_description:"Original transaction amount as a positive decimal number"`
-	Currency                    string `json:"currency" jsonschema_description:"Three-letter ISO 4217 currency code"`
-	IsPurchasedHasBeenCompleted bool   `json:"isPurchasedHasBeenCompleted" jsonschema_description:"True only when the bank says the transaction completed"`
-	TransactionType             string `json:"transactionType" jsonschema:"enum=income,enum=expense"`
-	Category                    string `json:"category" jsonschema_description:"Exact category name from the supplied categories"`
-	TransactionTime             string `json:"transactionTime" jsonschema_description:"Transaction time in YYYY-MM-DD HH:mm:ss format; use current time when absent"`
-	Remark                      string `json:"remark" jsonschema_description:"A few words describing what the transaction was for"`
-	StoreName                   string `json:"storeName" jsonschema_description:"Normalized merchant or counterparty name without location or legal suffixes"`
+	Amount          string `json:"amount" jsonschema_description:"Original transaction amount as a positive decimal number"`
+	Currency        string `json:"currency" jsonschema_description:"Three-letter ISO 4217 currency code"`
+	TransactionType string `json:"transactionType" jsonschema:"enum=income,enum=expense"`
+	Category        string `json:"category" jsonschema_description:"Exact category name from the supplied categories"`
+	TransactionTime string `json:"transactionTime" jsonschema_description:"Transaction time in YYYY-MM-DD HH:mm:ss format; use current time when absent"`
+	Remark          string `json:"remark" jsonschema_description:"A few words describing what the transaction was for"`
+	StoreName       string `json:"storeName" jsonschema_description:"Normalized merchant or counterparty name without location or legal suffixes"`
 }
 
 // BankMessageProcessResponse describes whether a bank message created a transaction.

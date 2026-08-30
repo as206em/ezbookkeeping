@@ -21,7 +21,6 @@ export interface BankMessageAutomationSettingRequest {
 export interface RecognizedBankMessage {
     amount: string;
     currency: string;
-    isPurchasedHasBeenCompleted: boolean;
     transactionType: 'income' | 'expense';
     category: string;
     transactionTime: string;

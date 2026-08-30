@@ -260,11 +260,6 @@ func (a *BankMessagesApi) process(c core.Context, setting *models.BankMessageAut
 		Recognized: recognized,
 	}
 
-	if !recognized.IsPurchasedHasBeenCompleted {
-		response.Reason = "not_completed"
-		return response, nil
-	}
-
 	category, exists := categoryMap[recognized.TransactionType+"\x00"+recognized.Category]
 
 	if !exists {
