@@ -14,11 +14,12 @@ export class TransactionCategory implements TransactionCategoryInfoResponse {
     public iconType: number;
     public color: ColorValue;
     public comment: string;
+    public aiGuidance: string;
     public displayOrder: number;
     public visible: boolean;
     public subCategories?: TransactionCategory[];
 
-    private constructor(id: string, name: string, parentId: string, type: CategoryType, icon: string, iconType: number, color: ColorValue, comment: string, displayOrder: number, visible: boolean, subCategories?: TransactionCategory[]) {
+    private constructor(id: string, name: string, parentId: string, type: CategoryType, icon: string, iconType: number, color: ColorValue, comment: string, aiGuidance: string, displayOrder: number, visible: boolean, subCategories?: TransactionCategory[]) {
         this.id = id;
         this.name = name;
         this.parentId = parentId;
@@ -27,6 +28,7 @@ export class TransactionCategory implements TransactionCategoryInfoResponse {
         this.iconType = iconType;
         this.color = color;
         this.comment = comment;
+        this.aiGuidance = aiGuidance;
         this.displayOrder = displayOrder;
         this.visible = visible;
 
@@ -50,6 +52,7 @@ export class TransactionCategory implements TransactionCategoryInfoResponse {
             this.iconType === other.iconType &&
             this.color === other.color &&
             this.comment === other.comment &&
+            this.aiGuidance === other.aiGuidance &&
             this.displayOrder === other.displayOrder &&
             this.visible === other.visible;
 
@@ -83,6 +86,7 @@ export class TransactionCategory implements TransactionCategoryInfoResponse {
         this.iconType = other.iconType;
         this.color = other.color;
         this.comment = other.comment;
+        this.aiGuidance = other.aiGuidance;
         this.visible = other.visible;
     }
 
@@ -96,6 +100,7 @@ export class TransactionCategory implements TransactionCategoryInfoResponse {
             this.iconType,
             this.color,
             this.comment,
+            this.aiGuidance,
             this.displayOrder,
             this.visible
         );
@@ -110,6 +115,7 @@ export class TransactionCategory implements TransactionCategoryInfoResponse {
             iconType: this.iconType,
             color: this.color,
             comment: this.comment,
+            aiGuidance: this.aiGuidance,
             clientSessionId: clientSessionId
         };
     }
@@ -123,6 +129,7 @@ export class TransactionCategory implements TransactionCategoryInfoResponse {
             iconType: this.iconType,
             color: this.color,
             comment: this.comment,
+            aiGuidance: this.aiGuidance,
             hidden: !this.visible
         };
     }
@@ -137,6 +144,7 @@ export class TransactionCategory implements TransactionCategoryInfoResponse {
             categoryResponse.iconType,
             categoryResponse.color,
             categoryResponse.comment,
+            categoryResponse.aiGuidance || '',
             categoryResponse.displayOrder,
             !categoryResponse.hidden,
             categoryResponse.subCategories ? TransactionCategory.ofMulti(categoryResponse.subCategories) : undefined
@@ -174,7 +182,7 @@ export class TransactionCategory implements TransactionCategoryInfoResponse {
     }
 
     public static createNewCategory(type?: CategoryType, parentId?: string): TransactionCategory {
-        return new TransactionCategory('', '', parentId || '0', type || CategoryType.Income, DEFAULT_CATEGORY_ICON_ID, IconType.System, DEFAULT_CATEGORY_COLOR, '', 0, true);
+        return new TransactionCategory('', '', parentId || '0', type || CategoryType.Income, DEFAULT_CATEGORY_ICON_ID, IconType.System, DEFAULT_CATEGORY_COLOR, '', '', 0, true);
     }
 }
 
@@ -186,6 +194,7 @@ export interface TransactionCategoryCreateRequest {
     readonly iconType: number;
     readonly color: string;
     readonly comment: string;
+    readonly aiGuidance: string;
     readonly clientSessionId: string;
 }
 
@@ -199,6 +208,7 @@ export interface TransactionCategoryCreateWithSubCategories {
     readonly icon: string;
     readonly iconType: number;
     readonly color: ColorValue;
+    readonly aiGuidance: string;
     readonly subCategories: TransactionCategoryCreateRequest[];
 }
 
@@ -210,6 +220,7 @@ export interface TransactionCategoryModifyRequest {
     readonly iconType: number;
     readonly color: string;
     readonly comment: string;
+    readonly aiGuidance: string;
     readonly hidden: boolean;
 }
 
@@ -240,6 +251,7 @@ export interface TransactionCategoryInfoResponse {
     readonly iconType: number;
     readonly color: string;
     readonly comment: string;
+    readonly aiGuidance: string;
     readonly displayOrder: number;
     readonly hidden: boolean;
     readonly subCategories?: TransactionCategoryInfoResponse[];

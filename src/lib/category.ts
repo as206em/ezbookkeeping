@@ -45,6 +45,7 @@ export function localizedPresetCategoryToTransactionCategoryCreateWithSubCategor
             iconType: IconType.System,
             color: subPresetCategory.color,
             comment: '',
+            aiGuidance: '',
             clientSessionId: ''
         };
 
@@ -57,6 +58,7 @@ export function localizedPresetCategoryToTransactionCategoryCreateWithSubCategor
         icon: presetCategory.icon,
         iconType: IconType.System,
         color: presetCategory.color,
+        aiGuidance: '',
         subCategories: subCategories
     };
 

@@ -19,7 +19,8 @@ Categorize it for personal finance tracking.
 Remarks must be a few words describing what the payment was for; use "Other" when uncertain.
 Use only facts in the message. Do not invent a merchant, account, amount, currency, or time.
 Normalize the merchant name by removing locations and legal suffixes such as LLC.
-Etisalat is an internet provider, Salik is a road toll, and ADNOC is normally fuel.`
+Etisalat is an internet provider, Salik is a road toll, and ADNOC is normally fuel.
+Treat a transaction as declined only when the bank explicitly says it was declined, rejected, unsuccessful, or failed.`
 
 // BankMessageAccountMapping maps text present in a bank message to an account.
 type BankMessageAccountMapping struct {
@@ -93,12 +94,13 @@ type BankMessageOutbox struct {
 	UpdatedUnixTime       int64                   `xorm:"NOT NULL"`
 }
 
-// BankMessageIdempotencyKey suppresses repeat deliveries only for the retry window.
+// BankMessageIdempotencyKey permanently suppresses repeat deliveries of the same message content.
 type BankMessageIdempotencyKey struct {
-	Uid             int64  `xorm:"PK"`
-	MessageHash     string `xorm:"VARCHAR(64) PK"`
-	OutboxId        int64  `xorm:"NOT NULL"`
-	ExpiresUnixTime int64  `xorm:"INDEX NOT NULL"`
+	Uid         int64  `xorm:"PK"`
+	MessageHash string `xorm:"VARCHAR(64) PK"`
+	OutboxId    int64  `xorm:"NOT NULL"`
+	// ExpiresUnixTime is retained for compatibility with databases created before idempotency became permanent.
+	ExpiresUnixTime int64 `xorm:"INDEX NOT NULL"`
 }
 
 type BankMessageOutboxResponse struct {
@@ -135,6 +137,7 @@ type BankMessageAcceptedResponse struct {
 type RecognizedBankMessage struct {
 	Amount          string `json:"amount" jsonschema_description:"Original transaction amount as a positive decimal number"`
 	Currency        string `json:"currency" jsonschema_description:"Three-letter ISO 4217 currency code"`
+	IsDeclined      bool   `json:"isDeclined" jsonschema_description:"True only when the bank explicitly says the attempted transaction was declined, rejected, unsuccessful, or failed; false when completion is merely unstated"`
 	TransactionType string `json:"transactionType" jsonschema:"enum=income,enum=expense"`
 	Category        string `json:"category" jsonschema_description:"Exact category name from the supplied categories"`
 	TransactionTime string `json:"transactionTime" jsonschema_description:"Transaction time in YYYY-MM-DD HH:mm:ss format; use current time when absent"`
@@ -142,11 +145,21 @@ type RecognizedBankMessage struct {
 	StoreName       string `json:"storeName" jsonschema_description:"Normalized merchant or counterparty name without location or legal suffixes"`
 }
 
+// BankMessageAIPreview describes the exact prompts sent to the LLM and its unmodified response.
+// It is returned only by the authenticated preview endpoint.
+type BankMessageAIPreview struct {
+	SystemPrompt string `json:"systemPrompt"`
+	UserPrompt   string `json:"userPrompt"`
+	RawResponse  string `json:"rawResponse"`
+}
+
 // BankMessageProcessResponse describes whether a bank message created a transaction.
 type BankMessageProcessResponse struct {
 	Created          bool                     `json:"created"`
 	Reason           string                   `json:"reason,omitempty"`
+	PreviewError     string                   `json:"previewError,omitempty"`
 	MatchedAccountId int64                    `json:"matchedAccountId,string,omitempty"`
 	Recognized       *RecognizedBankMessage   `json:"recognized,omitempty"`
 	Transaction      *TransactionInfoResponse `json:"transaction,omitempty"`
+	AIPreview        *BankMessageAIPreview    `json:"aiPreview,omitempty"`
 }

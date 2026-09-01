@@ -3,7 +3,6 @@ package services
 import (
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"strconv"
 	"time"
 
@@ -17,9 +16,6 @@ import (
 )
 
 const bankMessageOutboxProcessingTimeout = 5 * time.Minute
-const bankMessageIdempotencyWindow = 10 * time.Minute
-
-var errBankMessageDuplicateDelivery = errors.New("duplicate bank message delivery")
 
 // BankMessageOutboxService manages durable bank-message background work.
 type BankMessageOutboxService struct {
@@ -38,7 +34,7 @@ func (s *BankMessageOutboxService) Enqueue(c core.Context, uid int64, message st
 	}
 
 	now := time.Now().Unix()
-	existing, err := s.getActiveByContentHash(c, uid, messageHash, now)
+	existing, err := s.getByContentHash(c, uid, messageHash)
 	if err != nil {
 		return nil, false, err
 	} else if existing != nil {
@@ -64,36 +60,24 @@ func (s *BankMessageOutboxService) Enqueue(c core.Context, uid int64, message st
 	}
 
 	idempotencyKey := &models.BankMessageIdempotencyKey{
-		Uid:             uid,
-		MessageHash:     messageHash,
-		OutboxId:        outboxId,
-		ExpiresUnixTime: now + int64(bankMessageIdempotencyWindow/time.Second),
+		Uid:         uid,
+		MessageHash: messageHash,
+		OutboxId:    outboxId,
 	}
 
 	err = s.UserDB().DoTransaction(c, func(sess *xorm.Session) error {
-		if _, err := sess.Where("uid=? AND message_hash=? AND expires_unix_time<=?", uid, messageHash, now).Delete(&models.BankMessageIdempotencyKey{}); err != nil {
+		if _, err := sess.Insert(idempotencyKey); err != nil {
 			return err
 		}
-
-		has, err := sess.Where("uid=? AND message_hash=? AND expires_unix_time>?", uid, messageHash, now).Exist(&models.BankMessageIdempotencyKey{})
-		if err != nil {
-			return err
-		} else if has {
-			return errBankMessageDuplicateDelivery
-		}
-
-		if _, err = sess.Insert(item); err != nil {
-			return err
-		}
-		_, err = sess.Insert(idempotencyKey)
+		_, err := sess.Insert(item)
 		return err
 	})
 	if err == nil {
 		return item, false, nil
 	}
 
-	// A concurrent request may have inserted the same active idempotency key first.
-	existing, getErr := s.getActiveByContentHash(c, uid, messageHash, now)
+	// A concurrent request may have inserted the same permanent idempotency key first.
+	existing, getErr := s.getByContentHash(c, uid, messageHash)
 	if getErr == nil && existing != nil {
 		return existing, true, nil
 	}
@@ -111,14 +95,17 @@ func (s *BankMessageOutboxService) GetById(c core.Context, uid int64, outboxId i
 	return item, nil
 }
 
-func (s *BankMessageOutboxService) getActiveByContentHash(c core.Context, uid int64, messageHash string, now int64) (*models.BankMessageOutbox, error) {
-	key := &models.BankMessageIdempotencyKey{}
-	has, err := s.UserDB().NewSession(c).Where("uid=? AND message_hash=? AND expires_unix_time>?", uid, messageHash, now).Get(key)
+func (s *BankMessageOutboxService) getByContentHash(c core.Context, uid int64, messageHash string) (*models.BankMessageOutbox, error) {
+	item := &models.BankMessageOutbox{}
+	has, err := s.UserDB().NewSession(c).
+		Where("uid=? AND content_hash=?", uid, messageHash).
+		OrderBy("created_unix_time ASC").
+		Get(item)
 	if err != nil || !has {
 		return nil, err
 	}
 
-	return s.GetById(c, uid, key.OutboxId)
+	return item, nil
 }
 
 func (s *BankMessageOutboxService) ListByUid(c core.Context, uid int64, count int) ([]*models.BankMessageOutbox, error) {

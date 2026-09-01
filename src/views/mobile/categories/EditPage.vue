@@ -51,6 +51,7 @@
             </f7-list-item>
             <f7-list-item class="list-item-toggle" header="Visible" after="True"></f7-list-item>
             <f7-list-input label="Description" type="textarea" placeholder="Your category description (optional)"></f7-list-input>
+            <f7-list-input label="AI Categorization Guidance" type="textarea" placeholder="Describe merchants, locations, amounts, or other signals that help the AI choose this category"></f7-list-input>
         </f7-list>
 
         <f7-list form strong inset dividers class="margin-top-half" v-else-if="!loading">
@@ -143,6 +144,17 @@
                 :placeholder="tt('Your category description (optional)')"
                 v-textarea-auto-size
                 v-model:value="category.comment"
+            ></f7-list-input>
+
+            <f7-list-input
+                type="textarea"
+                style="height: auto"
+                :maxlength="512"
+                :label="tt('AI Categorization Guidance')"
+                :placeholder="tt('Describe merchants, locations, amounts, or other signals that help the AI choose this category')"
+                v-textarea-auto-size
+                v-model:value="category.aiGuidance"
+                v-if="category.parentId !== '0'"
             ></f7-list-input>
         </f7-list>
     </f7-page>

@@ -48,7 +48,7 @@ func initializeBankMessageServiceTest(t *testing.T) core.Context {
 	return core.NewNullContext()
 }
 
-func TestBankMessageOutboxDeduplicatesOnlyInsideRetryWindow(t *testing.T) {
+func TestBankMessageOutboxDeduplicatesPermanently(t *testing.T) {
 	c := initializeBankMessageServiceTest(t)
 	messageHash := "1111111111111111111111111111111111111111111111111111111111111111"
 
@@ -63,16 +63,14 @@ func TestBankMessageOutboxDeduplicatesOnlyInsideRetryWindow(t *testing.T) {
 	assert.Equal(t, first.OutboxId, second.OutboxId)
 
 	_, err = BankMessageOutbox.UserDB().NewSession(c).
-		Cols("expires_unix_time").
 		Where("uid=? AND message_hash=?", 1, messageHash).
-		Update(&models.BankMessageIdempotencyKey{ExpiresUnixTime: time.Now().Add(-time.Second).Unix()})
+		Delete(&models.BankMessageIdempotencyKey{})
 	require.NoError(t, err)
 
 	third, duplicate, err := BankMessageOutbox.Enqueue(c, 1, "same bank message", messageHash)
 	require.NoError(t, err)
-	assert.False(t, duplicate)
-	assert.NotEqual(t, first.OutboxId, third.OutboxId)
-	assert.NotEqual(t, first.MessageHash, third.MessageHash)
+	assert.True(t, duplicate)
+	assert.Equal(t, first.OutboxId, third.OutboxId)
 }
 
 func TestBankMessageOutboxClaimReservesTransactionIdForLegacyRows(t *testing.T) {

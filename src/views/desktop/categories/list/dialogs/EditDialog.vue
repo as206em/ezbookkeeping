@@ -67,6 +67,20 @@
                                 v-model="category.comment"
                             />
                         </v-col>
+                        <v-col cols="12" md="12" v-if="category.parentId !== '0'">
+                            <v-textarea
+                                type="text"
+                                persistent-placeholder
+                                persistent-hint
+                                rows="3"
+                                maxlength="512"
+                                :disabled="loading || submitting"
+                                :label="tt('AI Categorization Guidance')"
+                                :placeholder="tt('Describe merchants, locations, amounts, or other signals that help the AI choose this category')"
+                                :hint="tt('The AI compares this guidance with the merchant, location, amount, currency, and the complete bank message.')"
+                                v-model="category.aiGuidance"
+                            />
+                        </v-col>
                         <v-col class="py-0 my-n2" cols="12" md="12" v-if="editCategoryId">
                             <v-switch :disabled="loading || submitting"
                                       :label="tt('Visible')" v-model="category.visible"/>

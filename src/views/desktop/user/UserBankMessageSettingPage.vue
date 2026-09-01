@@ -97,9 +97,42 @@
                         <v-progress-circular indeterminate size="22" class="ms-2" v-if="previewing"/>
                     </v-btn>
 
-                    <v-alert type="success" variant="tonal" class="mt-5" v-if="previewResult">
-                        <pre class="preview-result">{{ JSON.stringify(previewResult, null, 2) }}</pre>
-                    </v-alert>
+                    <div class="mt-5" v-if="previewResult">
+                        <v-alert type="info" variant="tonal" class="mb-4">
+                            This is the exact prompt and response from this preview. No transaction was created.
+                        </v-alert>
+                        <v-alert type="warning" variant="tonal" class="mb-4" v-if="previewResult.previewError">
+                            {{ previewResult.previewError }}
+                        </v-alert>
+
+                        <v-card variant="outlined" class="mb-4" v-if="previewResult.aiPreview">
+                            <v-card-title>Rendered system prompt</v-card-title>
+                            <v-card-text>
+                                <pre class="preview-result preview-prompt">{{ previewResult.aiPreview.systemPrompt }}</pre>
+                            </v-card-text>
+                        </v-card>
+
+                        <v-card variant="outlined" class="mb-4" v-if="previewResult.aiPreview">
+                            <v-card-title>User prompt sent to AI</v-card-title>
+                            <v-card-text>
+                                <pre class="preview-result">{{ previewResult.aiPreview.userPrompt }}</pre>
+                            </v-card-text>
+                        </v-card>
+
+                        <v-card variant="outlined" class="mb-4" v-if="previewResult.aiPreview">
+                            <v-card-title>Raw AI response</v-card-title>
+                            <v-card-text>
+                                <pre class="preview-result">{{ previewResult.aiPreview.rawResponse }}</pre>
+                            </v-card-text>
+                        </v-card>
+
+                        <v-card variant="outlined">
+                            <v-card-title>Processed preview result</v-card-title>
+                            <v-card-text>
+                                <pre class="preview-result">{{ JSON.stringify(processedPreviewResult, null, 2) }}</pre>
+                            </v-card-text>
+                        </v-card>
+                    </div>
                 </v-card-text>
             </v-card>
         </v-col>
@@ -196,6 +229,21 @@ const accountOptions = computed(() => flattenAccounts(accounts.value).map(accoun
     id: account.id,
     title: `${account.name} (${account.currency})`
 })));
+
+const processedPreviewResult = computed(() => {
+    if (!previewResult.value) {
+        return null;
+    }
+
+    return {
+        created: previewResult.value.created,
+        reason: previewResult.value.reason,
+        previewError: previewResult.value.previewError,
+        matchedAccountId: previewResult.value.matchedAccountId,
+        recognized: previewResult.value.recognized,
+        transaction: previewResult.value.transaction
+    };
+});
 
 function flattenAccounts(items: AccountInfoResponse[]): AccountInfoResponse[] {
     const result: AccountInfoResponse[] = [];
@@ -354,6 +402,12 @@ onUnmounted(() => {
     margin: 0;
     overflow-x: auto;
     white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.preview-prompt {
+    max-height: 520px;
+    overflow-y: auto;
 }
 
 .outbox-message,
