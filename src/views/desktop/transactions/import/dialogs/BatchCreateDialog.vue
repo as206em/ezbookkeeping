@@ -260,6 +260,7 @@ function confirm(): void {
             icon: AUTOMATICALLY_CREATED_CATEGORY_ICON_ID,
             iconType: IconType.System,
             color: DEFAULT_CATEGORY_COLOR,
+            aiGuidance: '',
             subCategories: subCategories
         }];
 

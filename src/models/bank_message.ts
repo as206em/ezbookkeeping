@@ -29,12 +29,20 @@ export interface RecognizedBankMessage {
     storeName: string;
 }
 
+export interface BankMessageAIPreview {
+    systemPrompt: string;
+    userPrompt: string;
+    rawResponse: string;
+}
+
 export interface BankMessageProcessResponse {
     created: boolean;
     reason?: string;
+    previewError?: string;
     matchedAccountId?: string;
     recognized?: RecognizedBankMessage;
     transaction?: TransactionInfoResponse;
+    aiPreview?: BankMessageAIPreview;
 }
 
 export type BankMessageOutboxStatus = 'queued' | 'processing' | 'retrying' | 'paused' | 'succeeded' | 'ignored' | 'failed';

@@ -145,11 +145,21 @@ type RecognizedBankMessage struct {
 	StoreName       string `json:"storeName" jsonschema_description:"Normalized merchant or counterparty name without location or legal suffixes"`
 }
 
+// BankMessageAIPreview describes the exact prompts sent to the LLM and its unmodified response.
+// It is returned only by the authenticated preview endpoint.
+type BankMessageAIPreview struct {
+	SystemPrompt string `json:"systemPrompt"`
+	UserPrompt   string `json:"userPrompt"`
+	RawResponse  string `json:"rawResponse"`
+}
+
 // BankMessageProcessResponse describes whether a bank message created a transaction.
 type BankMessageProcessResponse struct {
 	Created          bool                     `json:"created"`
 	Reason           string                   `json:"reason,omitempty"`
+	PreviewError     string                   `json:"previewError,omitempty"`
 	MatchedAccountId int64                    `json:"matchedAccountId,string,omitempty"`
 	Recognized       *RecognizedBankMessage   `json:"recognized,omitempty"`
 	Transaction      *TransactionInfoResponse `json:"transaction,omitempty"`
+	AIPreview        *BankMessageAIPreview    `json:"aiPreview,omitempty"`
 }

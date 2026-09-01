@@ -28,3 +28,15 @@ func TestTransactionCategoryInfoResponseSliceLess(t *testing.T) {
 	assert.Equal(t, int64(3), transactionCategoryRespSlice[1].Id)
 	assert.Equal(t, int64(1), transactionCategoryRespSlice[2].Id)
 }
+
+func TestTransactionCategoryResponseIncludesAIGuidance(t *testing.T) {
+	category := &TransactionCategory{
+		CategoryId: 1,
+		Name:       "Transport",
+		AiGuidance: "Use for Udrive and taxi transactions.",
+	}
+
+	response := category.ToTransactionCategoryInfoResponse()
+
+	assert.Equal(t, category.AiGuidance, response.AiGuidance)
+}

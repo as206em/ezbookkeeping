@@ -51,9 +51,34 @@
                            @input="testMessage = $event.target.value"/>
             <f7-list-button :class="{ disabled: !testMessage.trim() }" @click="preview">Preview</f7-list-button>
         </f7-list>
-        <f7-block strong inset v-if="previewResult">
-            <pre class="bank-message-preview">{{ JSON.stringify(previewResult, null, 2) }}</pre>
-        </f7-block>
+        <template v-if="previewResult">
+            <f7-block class="margin-vertical-half">
+                This is the exact prompt and response from this preview. No transaction was created.
+            </f7-block>
+            <f7-block class="text-color-orange margin-vertical-half" v-if="previewResult.previewError">
+                {{ previewResult.previewError }}
+            </f7-block>
+
+            <f7-block-title v-if="previewResult.aiPreview">Rendered system prompt</f7-block-title>
+            <f7-block strong inset v-if="previewResult.aiPreview">
+                <pre class="bank-message-preview bank-message-prompt">{{ previewResult.aiPreview.systemPrompt }}</pre>
+            </f7-block>
+
+            <f7-block-title v-if="previewResult.aiPreview">User prompt sent to AI</f7-block-title>
+            <f7-block strong inset v-if="previewResult.aiPreview">
+                <pre class="bank-message-preview">{{ previewResult.aiPreview.userPrompt }}</pre>
+            </f7-block>
+
+            <f7-block-title v-if="previewResult.aiPreview">Raw AI response</f7-block-title>
+            <f7-block strong inset v-if="previewResult.aiPreview">
+                <pre class="bank-message-preview">{{ previewResult.aiPreview.rawResponse }}</pre>
+            </f7-block>
+
+            <f7-block-title>Processed preview result</f7-block-title>
+            <f7-block strong inset>
+                <pre class="bank-message-preview">{{ JSON.stringify(processedPreviewResult, null, 2) }}</pre>
+            </f7-block>
+        </template>
 
         <f7-block-title>Bank SMS outbox</f7-block-title>
         <f7-block class="margin-vertical-half">
@@ -120,6 +145,21 @@ const accountOptions = computed(() => flattenAccounts(accounts.value).map(accoun
     id: account.id,
     title: `${account.name} (${account.currency})`
 })));
+
+const processedPreviewResult = computed(() => {
+    if (!previewResult.value) {
+        return null;
+    }
+
+    return {
+        created: previewResult.value.created,
+        reason: previewResult.value.reason,
+        previewError: previewResult.value.previewError,
+        matchedAccountId: previewResult.value.matchedAccountId,
+        recognized: previewResult.value.recognized,
+        transaction: previewResult.value.transaction
+    };
+});
 
 function flattenAccounts(items: AccountInfoResponse[]): AccountInfoResponse[] {
     const result: AccountInfoResponse[] = [];
@@ -266,6 +306,12 @@ onUnmounted(() => window.clearInterval(outboxRefreshTimer));
     margin: 0;
     overflow-x: auto;
     white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.bank-message-prompt {
+    max-height: 480px;
+    overflow-y: auto;
 }
 
 .bank-message-outbox-text {

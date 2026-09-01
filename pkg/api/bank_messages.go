@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"html/template"
 	"math/big"
 	"reflect"
 	"sort"
@@ -248,8 +249,8 @@ func (a *BankMessagesApi) process(c core.Context, setting *models.BankMessageAut
 		return nil, errs.Or(err, errs.ErrOperationFailed)
 	}
 
-	categoryNames, categoryMap := bankMessageCategoryData(categories)
-	recognized, recognitionErr := a.recognize(c, setting, text, clientTimezone, categoryNames)
+	categoryOptions, categoryMap := bankMessageCategoryData(categories)
+	recognized, aiPreview, recognitionErr := a.recognize(c, setting, text, clientTimezone, categoryOptions)
 
 	if recognitionErr != nil {
 		return nil, recognitionErr
@@ -258,6 +259,9 @@ func (a *BankMessagesApi) process(c core.Context, setting *models.BankMessageAut
 	response := &models.BankMessageProcessResponse{
 		Created:    false,
 		Recognized: recognized,
+	}
+	if !create {
+		response.AIPreview = aiPreview
 	}
 
 	if recognized.IsDeclined {
@@ -268,31 +272,31 @@ func (a *BankMessagesApi) process(c core.Context, setting *models.BankMessageAut
 	category, exists := categoryMap[recognized.TransactionType+"\x00"+recognized.Category]
 
 	if !exists {
-		return nil, errs.ErrBankMessageCategoryNotFound
+		return bankMessageProcessError(response, create, errs.ErrBankMessageCategoryNotFound)
 	}
 
 	accountId, accountErr := a.identifyAccount(c, setting, text)
 
 	if accountErr != nil {
-		return nil, accountErr
+		return bankMessageProcessError(response, create, accountErr)
 	}
 
 	account, err := a.accounts.GetAccountByAccountId(c, setting.Uid, accountId)
 
 	if err != nil {
-		return nil, errs.Or(err, errs.ErrBankMessageAccountNotIdentified)
+		return bankMessageProcessError(response, create, errs.Or(err, errs.ErrBankMessageAccountNotIdentified))
 	}
 
 	amount, amountErr := a.amountInAccountCurrency(c, setting.Uid, recognized.Amount, strings.ToUpper(recognized.Currency), account.Currency)
 
 	if amountErr != nil {
-		return nil, amountErr
+		return bankMessageProcessError(response, create, amountErr)
 	}
 
 	_, dbType, typeErr := bankMessageTransactionTypes(recognized.TransactionType)
 
 	if typeErr != nil {
-		return nil, typeErr
+		return bankMessageProcessError(response, create, typeErr)
 	}
 
 	transactionTime := time.Now().In(clientTimezone)
@@ -320,7 +324,7 @@ func (a *BankMessagesApi) process(c core.Context, setting *models.BankMessageAut
 	}
 
 	if !user.CanEditTransactionByTransactionTime(transaction.TransactionTime, clientTimezone, account, nil) {
-		return nil, errs.ErrCannotCreateTransactionWithThisTransactionTime
+		return bankMessageProcessError(response, create, errs.ErrCannotCreateTransactionWithThisTransactionTime)
 	}
 
 	response.MatchedAccountId = accountId
@@ -347,48 +351,41 @@ func (a *BankMessagesApi) process(c core.Context, setting *models.BankMessageAut
 	return response, nil
 }
 
-func (a *BankMessagesApi) recognize(c core.Context, setting *models.BankMessageAutomationSetting, text string, clientTimezone *time.Location, categoryNames map[string][]string) (*models.RecognizedBankMessage, *errs.Error) {
-	systemPrompt, err := templates.GetTemplate(templates.SYSTEM_PROMPT_BANK_MESSAGE_RECOGNITION)
+func bankMessageProcessError(response *models.BankMessageProcessResponse, create bool, err *errs.Error) (*models.BankMessageProcessResponse, *errs.Error) {
+	if create {
+		return nil, err
+	}
 
+	response.Reason = "preview"
+	response.PreviewError = err.Error()
+	return response, nil
+}
+
+func (a *BankMessagesApi) recognize(c core.Context, setting *models.BankMessageAutomationSetting, text string, clientTimezone *time.Location, categoryOptions map[string][]bankMessageCategoryPromptItem) (*models.RecognizedBankMessage, *models.BankMessageAIPreview, *errs.Error) {
+	request, err := buildBankMessageRecognitionRequest(setting, text, clientTimezone, categoryOptions)
 	if err != nil {
-		return nil, errs.Or(err, errs.ErrOperationFailed)
+		return nil, nil, err
 	}
 
-	params := map[string]any{
-		"CustomPrompt":            setting.Prompt,
-		"AllExpenseCategoryNames": strings.Join(categoryNames["expense"], "\n"),
-		"AllIncomeCategoryNames":  strings.Join(categoryNames["income"], "\n"),
-		"CurrentDateTime":         utils.FormatUnixTimeToLongDateTime(time.Now().Unix(), clientTimezone),
-	}
+	llmResponse, responseErr := llm.Container.GetJsonResponseByTextRecognitionModel(c, setting.Uid, a.CurrentConfig(), request)
 
-	var prompt bytes.Buffer
-
-	if err := systemPrompt.Execute(&prompt, params); err != nil {
-		return nil, errs.Or(err, errs.ErrOperationFailed)
-	}
-
-	request := &data.LargeLanguageModelRequest{
-		Stream:                 false,
-		SystemPrompt:           strings.ReplaceAll(prompt.String(), "\r\n", "\n"),
-		UserPrompt:             []byte(strings.TrimSpace(text)),
-		UserPromptType:         data.LARGE_LANGUAGE_MODEL_REQUEST_PROMPT_TYPE_TEXT,
-		ResponseJsonObjectType: reflect.TypeOf(models.RecognizedBankMessage{}),
-	}
-
-	llmResponse, err := llm.Container.GetJsonResponseByTextRecognitionModel(c, setting.Uid, a.CurrentConfig(), request)
-
-	if err != nil {
-		return nil, errs.Or(err, errs.ErrOperationFailed)
+	if responseErr != nil {
+		return nil, nil, errs.Or(responseErr, errs.ErrOperationFailed)
 	}
 
 	if llmResponse == nil || strings.TrimSpace(llmResponse.Content) == "" {
-		return nil, errs.ErrNoTransactionInformation
+		return nil, nil, errs.ErrNoTransactionInformation
 	}
 
+	aiPreview := &models.BankMessageAIPreview{
+		SystemPrompt: request.SystemPrompt,
+		UserPrompt:   string(request.UserPrompt),
+		RawResponse:  llmResponse.Content,
+	}
 	result := &models.RecognizedBankMessage{}
 
 	if err := json.Unmarshal([]byte(llmResponse.Content), result); err != nil {
-		return nil, errs.Or(err, errs.ErrOperationFailed)
+		return nil, nil, errs.Or(err, errs.ErrOperationFailed)
 	}
 
 	result.TransactionType = strings.ToLower(strings.TrimSpace(result.TransactionType))
@@ -397,7 +394,48 @@ func (a *BankMessagesApi) recognize(c core.Context, setting *models.BankMessageA
 	result.StoreName = strings.TrimSpace(result.StoreName)
 	result.Remark = strings.TrimSpace(result.Remark)
 
-	return result, nil
+	return result, aiPreview, nil
+}
+
+func buildBankMessageRecognitionRequest(setting *models.BankMessageAutomationSetting, text string, clientTimezone *time.Location, categoryOptions map[string][]bankMessageCategoryPromptItem) (*data.LargeLanguageModelRequest, *errs.Error) {
+	systemPrompt, err := templates.GetTemplate(templates.SYSTEM_PROMPT_BANK_MESSAGE_RECOGNITION)
+
+	if err != nil {
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	expenseCategories, err := json.Marshal(categoryOptions["expense"])
+	if err != nil {
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	incomeCategories, err := json.Marshal(categoryOptions["income"])
+	if err != nil {
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	params := map[string]any{
+		// These values render into an LLM text prompt, not an HTML response. Marking them as
+		// template text prevents html/template from replacing JSON quotes with HTML entities.
+		"CustomPrompt":         template.HTML(setting.Prompt),
+		"AllExpenseCategories": template.HTML(expenseCategories),
+		"AllIncomeCategories":  template.HTML(incomeCategories),
+		"CurrentDateTime":      template.HTML(utils.FormatUnixTimeToLongDateTime(time.Now().Unix(), clientTimezone)),
+	}
+
+	var prompt bytes.Buffer
+
+	if err := systemPrompt.Execute(&prompt, params); err != nil {
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	return &data.LargeLanguageModelRequest{
+		Stream:                 false,
+		SystemPrompt:           strings.ReplaceAll(prompt.String(), "\r\n", "\n"),
+		UserPrompt:             []byte(strings.TrimSpace(text)),
+		UserPromptType:         data.LARGE_LANGUAGE_MODEL_REQUEST_PROMPT_TYPE_TEXT,
+		ResponseJsonObjectType: reflect.TypeOf(models.RecognizedBankMessage{}),
+	}, nil
 }
 
 func (a *BankMessagesApi) identifyAccount(c core.Context, setting *models.BankMessageAutomationSetting, text string) (int64, *errs.Error) {
@@ -525,8 +563,13 @@ func bindBankMessageRequest(c *core.WebContext) (*models.BankMessageIngestReques
 	return request, nil
 }
 
-func bankMessageCategoryData(categories []*models.TransactionCategory) (map[string][]string, map[string]*models.TransactionCategory) {
-	names := map[string][]string{
+type bankMessageCategoryPromptItem struct {
+	Name     string `json:"name"`
+	Guidance string `json:"guidance,omitempty"`
+}
+
+func bankMessageCategoryData(categories []*models.TransactionCategory) (map[string][]bankMessageCategoryPromptItem, map[string]*models.TransactionCategory) {
+	options := map[string][]bankMessageCategoryPromptItem{
 		"income":  {},
 		"expense": {},
 	}
@@ -547,16 +590,21 @@ func bankMessageCategoryData(categories []*models.TransactionCategory) (map[stri
 		}
 
 		if typeName != "" {
-			names[typeName] = append(names[typeName], category.Name)
+			options[typeName] = append(options[typeName], bankMessageCategoryPromptItem{
+				Name:     category.Name,
+				Guidance: strings.TrimSpace(category.AiGuidance),
+			})
 			categoryMap[typeName+"\x00"+category.Name] = category
 		}
 	}
 
-	for typeName := range names {
-		sort.Strings(names[typeName])
+	for typeName := range options {
+		sort.Slice(options[typeName], func(i int, j int) bool {
+			return options[typeName][i].Name < options[typeName][j].Name
+		})
 	}
 
-	return names, categoryMap
+	return options, categoryMap
 }
 
 func bankMessageTransactionTypes(typeName string) (models.TransactionType, models.TransactionDbType, *errs.Error) {
