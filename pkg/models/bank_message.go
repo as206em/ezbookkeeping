@@ -19,7 +19,8 @@ Categorize it for personal finance tracking.
 Remarks must be a few words describing what the payment was for; use "Other" when uncertain.
 Use only facts in the message. Do not invent a merchant, account, amount, currency, or time.
 Normalize the merchant name by removing locations and legal suffixes such as LLC.
-Etisalat is an internet provider, Salik is a road toll, and ADNOC is normally fuel.`
+Etisalat is an internet provider, Salik is a road toll, and ADNOC is normally fuel.
+Treat a transaction as declined only when the bank explicitly says it was declined, rejected, unsuccessful, or failed.`
 
 // BankMessageAccountMapping maps text present in a bank message to an account.
 type BankMessageAccountMapping struct {
@@ -135,6 +136,7 @@ type BankMessageAcceptedResponse struct {
 type RecognizedBankMessage struct {
 	Amount          string `json:"amount" jsonschema_description:"Original transaction amount as a positive decimal number"`
 	Currency        string `json:"currency" jsonschema_description:"Three-letter ISO 4217 currency code"`
+	IsDeclined      bool   `json:"isDeclined" jsonschema_description:"True only when the bank explicitly says the attempted transaction was declined, rejected, unsuccessful, or failed; false when completion is merely unstated"`
 	TransactionType string `json:"transactionType" jsonschema:"enum=income,enum=expense"`
 	Category        string `json:"category" jsonschema_description:"Exact category name from the supplied categories"`
 	TransactionTime string `json:"transactionTime" jsonschema_description:"Transaction time in YYYY-MM-DD HH:mm:ss format; use current time when absent"`

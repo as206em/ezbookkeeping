@@ -13,6 +13,9 @@ Use a positive numeric amount without a currency symbol.
 Use a three-letter uppercase ISO currency code.
 Use the transaction time from the message when present; otherwise use the current time.
 Do not use an account name or account identifier as the category.
+Set isDeclined to true only when the bank explicitly states that the attempted transaction was declined, rejected, unsuccessful, or failed.
+Do not infer a decline because the message does not explicitly say the transaction completed.
+Refunded, reversed, cancelled, or pending transactions are not declined for this field.
 
 ## Available expense categories
 {{.AllExpenseCategoryNames}}

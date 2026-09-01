@@ -260,6 +260,11 @@ func (a *BankMessagesApi) process(c core.Context, setting *models.BankMessageAut
 		Recognized: recognized,
 	}
 
+	if recognized.IsDeclined {
+		response.Reason = "declined"
+		return response, nil
+	}
+
 	category, exists := categoryMap[recognized.TransactionType+"\x00"+recognized.Category]
 
 	if !exists {
