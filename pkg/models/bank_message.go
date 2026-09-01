@@ -94,12 +94,13 @@ type BankMessageOutbox struct {
 	UpdatedUnixTime       int64                   `xorm:"NOT NULL"`
 }
 
-// BankMessageIdempotencyKey suppresses repeat deliveries only for the retry window.
+// BankMessageIdempotencyKey permanently suppresses repeat deliveries of the same message content.
 type BankMessageIdempotencyKey struct {
-	Uid             int64  `xorm:"PK"`
-	MessageHash     string `xorm:"VARCHAR(64) PK"`
-	OutboxId        int64  `xorm:"NOT NULL"`
-	ExpiresUnixTime int64  `xorm:"INDEX NOT NULL"`
+	Uid         int64  `xorm:"PK"`
+	MessageHash string `xorm:"VARCHAR(64) PK"`
+	OutboxId    int64  `xorm:"NOT NULL"`
+	// ExpiresUnixTime is retained for compatibility with databases created before idempotency became permanent.
+	ExpiresUnixTime int64 `xorm:"INDEX NOT NULL"`
 }
 
 type BankMessageOutboxResponse struct {

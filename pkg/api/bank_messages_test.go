@@ -1,6 +1,8 @@
 package api
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -95,6 +97,9 @@ func TestBankMessageComment(t *testing.T) {
 }
 
 func TestBankMessageDuplicateKeyNormalizesCaseAndWhitespace(t *testing.T) {
+	expectedHash := sha256.Sum256([]byte("purchase at adnoc"))
+
+	assert.Equal(t, hex.EncodeToString(expectedHash[:]), bankMessageDuplicateKey("  Purchase   AT ADNOC "))
 	assert.Equal(t, bankMessageDuplicateKey("  Purchase   AT ADNOC "), bankMessageDuplicateKey("purchase at adnoc"))
 	assert.NotEqual(t, bankMessageDuplicateKey("purchase at adnoc"), bankMessageDuplicateKey("purchase at salik"))
 }
