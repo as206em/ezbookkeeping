@@ -6,6 +6,7 @@ import { useUserStore } from './user.ts';
 import { useAccountsStore } from './account.ts';
 import { useTransactionCategoriesStore } from './transactionCategory.ts';
 import { useTransactionCategoryBudgetsStore } from './transactionCategoryBudget.ts';
+import { useTransactionCategoryMerchantsStore } from './transactionCategoryMerchant.ts';
 import { useTransactionTagsStore } from './transactionTag.ts';
 import { useTransactionTemplatesStore } from './transactionTemplate.ts';
 import { useTransactionsStore } from './transaction.ts';
@@ -49,6 +50,7 @@ export const useRootStore = defineStore('root', () => {
     const accountsStore = useAccountsStore();
     const transactionCategoriesStore = useTransactionCategoriesStore();
     const transactionCategoryBudgetsStore = useTransactionCategoryBudgetsStore();
+    const transactionCategoryMerchantsStore = useTransactionCategoryMerchantsStore();
     const transactionTagsStore = useTransactionTagsStore();
     const transactionTemplatesStore = useTransactionTemplatesStore();
     const transactionsStore = useTransactionsStore();
@@ -75,6 +77,7 @@ export const useRootStore = defineStore('root', () => {
         transactionTagsStore.resetTransactionTags();
         transactionCategoriesStore.resetTransactionCategories();
         transactionCategoryBudgetsStore.resetCategoryBudgets();
+        transactionCategoryMerchantsStore.resetCategoryMerchants();
         transactionTemplatesStore.resetTransactionTemplates();
         accountsStore.resetAccounts();
 

@@ -16,7 +16,7 @@ import (
 	"github.com/mayswind/ezbookkeeping/pkg/models"
 )
 
-func TestBankMessageCategoryDataUsesVisibleSecondaryCategories(t *testing.T) {
+func TestBankMessageCategoryDataUsesVisibleSecondaryCategoriesWithPaths(t *testing.T) {
 	categories := []*models.TransactionCategory{
 		{CategoryId: 1, Name: "Expenses", Type: models.CATEGORY_TYPE_EXPENSE, ParentCategoryId: models.LevelOneTransactionCategoryParentId},
 		{CategoryId: 2, Name: "Grocery -", Type: models.CATEGORY_TYPE_EXPENSE, ParentCategoryId: 1},
@@ -24,13 +24,44 @@ func TestBankMessageCategoryDataUsesVisibleSecondaryCategories(t *testing.T) {
 		{CategoryId: 4, Name: "Hidden -", Type: models.CATEGORY_TYPE_EXPENSE, ParentCategoryId: 1, Hidden: true},
 	}
 
-	options, categoryMap := bankMessageCategoryData(categories)
+	options, lookup := bankMessageCategoryData(categories, nil)
 
-	assert.Equal(t, []bankMessageCategoryPromptItem{{Name: "Grocery -"}}, options["expense"])
+	assert.Equal(t, []bankMessageCategoryPromptItem{{Name: "Expenses > Grocery -"}}, options["expense"])
 	assert.Equal(t, []bankMessageCategoryPromptItem{{Name: "Salary +"}}, options["income"])
 	assert.NotContains(t, options, "transfer")
-	assert.Equal(t, int64(2), categoryMap["expense\x00Grocery -"].CategoryId)
-	assert.NotContains(t, categoryMap, "expense\x00Hidden -")
+
+	category, source := lookup.resolve("expense", "Expenses > Grocery -", "")
+	require.NotNil(t, category)
+	assert.Equal(t, int64(2), category.CategoryId)
+	assert.Equal(t, "ai", source)
+
+	category, _ = lookup.resolve("expense", "Grocery -", "")
+	require.NotNil(t, category)
+	assert.Equal(t, int64(2), category.CategoryId)
+
+	category, _ = lookup.resolve("expense", "Expenses > Hidden -", "")
+	assert.Nil(t, category)
+}
+
+func TestBankMessageCategoryDataDistinguishesSameNamedSecondaryCategories(t *testing.T) {
+	categories := []*models.TransactionCategory{
+		{CategoryId: 1, Name: "Food", Type: models.CATEGORY_TYPE_EXPENSE, ParentCategoryId: models.LevelOneTransactionCategoryParentId},
+		{CategoryId: 2, Name: "Car", Type: models.CATEGORY_TYPE_EXPENSE, ParentCategoryId: models.LevelOneTransactionCategoryParentId},
+		{CategoryId: 3, Name: "Other", Type: models.CATEGORY_TYPE_EXPENSE, ParentCategoryId: 1},
+		{CategoryId: 4, Name: "Other", Type: models.CATEGORY_TYPE_EXPENSE, ParentCategoryId: 2},
+	}
+
+	_, lookup := bankMessageCategoryData(categories, nil)
+
+	food, _ := lookup.resolve("expense", "Food > Other", "")
+	car, _ := lookup.resolve("expense", "Car > Other", "")
+	ambiguous, _ := lookup.resolve("expense", "Other", "")
+
+	require.NotNil(t, food)
+	require.NotNil(t, car)
+	assert.Equal(t, int64(3), food.CategoryId)
+	assert.Equal(t, int64(4), car.CategoryId)
+	assert.Nil(t, ambiguous)
 }
 
 func TestBankMessageCategoryDataExcludesTransferCategories(t *testing.T) {
@@ -39,30 +70,64 @@ func TestBankMessageCategoryDataExcludesTransferCategories(t *testing.T) {
 		{CategoryId: 2, Name: "Transfer Out --", Type: models.CATEGORY_TYPE_TRANSFER, ParentCategoryId: 1},
 	}
 
-	options, categoryMap := bankMessageCategoryData(categories)
+	options, lookup := bankMessageCategoryData(categories, nil)
+	category, _ := lookup.resolve("transfer", "Transfers > Transfer Out --", "")
 
 	assert.NotContains(t, options, "transfer")
-	assert.NotContains(t, categoryMap, "transfer\x00Transfer Out --")
+	assert.Nil(t, category)
 }
 
-func TestBankMessageCategoryDataIncludesTrimmedAIGuidance(t *testing.T) {
+func TestBankMessageCategoryDataIncludesTrimmedAIGuidanceAndMerchants(t *testing.T) {
 	categories := []*models.TransactionCategory{
 		{CategoryId: 1, Name: "Food", Type: models.CATEGORY_TYPE_EXPENSE, ParentCategoryId: 9, AiGuidance: "  Talabat food orders; consider merchant, location, and amount.  "},
 		{CategoryId: 2, Name: "Transport", Type: models.CATEGORY_TYPE_EXPENSE, ParentCategoryId: 9, AiGuidance: "Talabat only when the message indicates transport."},
 	}
+	merchants := []*models.TransactionCategoryMerchant{
+		{MerchantKey: "salik", Merchant: "Salik", CategoryId: 2},
+		{MerchantKey: "careem", Merchant: "Careem", CategoryId: 2},
+		{MerchantKey: "deleted", Merchant: "Deleted", CategoryId: 99},
+	}
 
-	options, _ := bankMessageCategoryData(categories)
+	options, _ := bankMessageCategoryData(categories, merchants)
 	promptData, err := json.Marshal(options["expense"])
 
 	require.NoError(t, err)
-	assert.Equal(t, []bankMessageCategoryPromptItem{
-		{Name: "Food", Guidance: "Talabat food orders; consider merchant, location, and amount."},
-		{Name: "Transport", Guidance: "Talabat only when the message indicates transport."},
-	}, options["expense"])
 	assert.JSONEq(t, `[
 		{"name":"Food","guidance":"Talabat food orders; consider merchant, location, and amount."},
-		{"name":"Transport","guidance":"Talabat only when the message indicates transport."}
+		{"name":"Transport","guidance":"Talabat only when the message indicates transport.","merchants":["Careem","Salik"]}
 	]`, string(promptData))
+}
+
+func TestBankMessageCategoryLookupPrefersMerchantRules(t *testing.T) {
+	categories := []*models.TransactionCategory{
+		{CategoryId: 1, Name: "Food", Type: models.CATEGORY_TYPE_EXPENSE, ParentCategoryId: models.LevelOneTransactionCategoryParentId},
+		{CategoryId: 2, Name: "Restaurants", Type: models.CATEGORY_TYPE_EXPENSE, ParentCategoryId: 1},
+		{CategoryId: 3, Name: "Groceries", Type: models.CATEGORY_TYPE_EXPENSE, ParentCategoryId: 1},
+		{CategoryId: 5, Name: "Income", Type: models.CATEGORY_TYPE_INCOME, ParentCategoryId: models.LevelOneTransactionCategoryParentId},
+		{CategoryId: 4, Name: "Refunds", Type: models.CATEGORY_TYPE_INCOME, ParentCategoryId: 5},
+	}
+	merchants := []*models.TransactionCategoryMerchant{
+		{MerchantKey: "carrefour", Merchant: "Carrefour", CategoryId: 3},
+	}
+
+	_, lookup := bankMessageCategoryData(categories, merchants)
+
+	category, source := lookup.resolve("expense", "Food > Restaurants", "  CARREFOUR ")
+	require.NotNil(t, category)
+	assert.Equal(t, int64(3), category.CategoryId)
+	assert.Equal(t, "merchant", source)
+	assert.Equal(t, "Food > Groceries", lookup.paths[category.CategoryId])
+
+	// a merchant rule only applies to its own transaction type
+	category, source = lookup.resolve("income", "Income > Refunds", "Carrefour")
+	require.NotNil(t, category)
+	assert.Equal(t, int64(4), category.CategoryId)
+	assert.Equal(t, "ai", source)
+
+	category, source = lookup.resolve("expense", "Food > Restaurants", "Unknown Cafe")
+	require.NotNil(t, category)
+	assert.Equal(t, int64(2), category.CategoryId)
+	assert.Equal(t, "ai", source)
 }
 
 func TestBuildBankMessageRecognitionRequestRendersPreviewPrompts(t *testing.T) {

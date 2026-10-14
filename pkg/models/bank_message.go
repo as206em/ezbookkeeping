@@ -139,7 +139,7 @@ type RecognizedBankMessage struct {
 	Currency        string `json:"currency" jsonschema_description:"Three-letter ISO 4217 currency code"`
 	IsDeclined      bool   `json:"isDeclined" jsonschema_description:"True only when the bank explicitly says the attempted transaction was declined, rejected, unsuccessful, or failed; false when completion is merely unstated"`
 	TransactionType string `json:"transactionType" jsonschema:"enum=income,enum=expense"`
-	Category        string `json:"category" jsonschema_description:"Exact category name from the supplied categories"`
+	Category        string `json:"category" jsonschema_description:"Exact category name from the supplied categories, including the primary category prefix"`
 	TransactionTime string `json:"transactionTime" jsonschema_description:"Transaction time in YYYY-MM-DD HH:mm:ss format; use current time when absent"`
 	Remark          string `json:"remark" jsonschema_description:"A few words describing what the transaction was for"`
 	StoreName       string `json:"storeName" jsonschema_description:"Normalized merchant or counterparty name without location or legal suffixes"`
@@ -159,6 +159,8 @@ type BankMessageProcessResponse struct {
 	Reason           string                   `json:"reason,omitempty"`
 	PreviewError     string                   `json:"previewError,omitempty"`
 	MatchedAccountId int64                    `json:"matchedAccountId,string,omitempty"`
+	Category         string                   `json:"category,omitempty"`
+	CategorySource   string                   `json:"categorySource,omitempty"`
 	Recognized       *RecognizedBankMessage   `json:"recognized,omitempty"`
 	Transaction      *TransactionInfoResponse `json:"transaction,omitempty"`
 	AIPreview        *BankMessageAIPreview    `json:"aiPreview,omitempty"`

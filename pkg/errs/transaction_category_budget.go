@@ -9,3 +9,9 @@ var (
 	ErrTransactionCategoryBudgetCategoryDuplicate = NewNormalError(NormalSubcategoryCategory, 14, http.StatusBadRequest, "a category appears more than once in the budgets")
 	ErrTransactionCategoryBudgetAmountInvalid     = NewNormalError(NormalSubcategoryCategory, 15, http.StatusBadRequest, "budget amount is invalid")
 )
+
+// Error codes related to transaction category merchant rules
+var (
+	ErrTransactionCategoryMerchantInvalid         = NewNormalError(NormalSubcategoryCategory, 16, http.StatusBadRequest, "merchant name is invalid")
+	ErrTransactionCategoryMerchantCategoryInvalid = NewNormalError(NormalSubcategoryCategory, 17, http.StatusBadRequest, "merchants can only be added to income or expense secondary categories")
+)

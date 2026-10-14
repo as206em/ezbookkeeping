@@ -109,6 +109,14 @@ func updateAllDatabaseTablesStructure(c *core.CliContext) error {
 
 	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] transaction category budget table maintained successfully")
 
+	err = datastore.Container.UserDataStore.SyncStructs(new(models.TransactionCategoryMerchant))
+
+	if err != nil {
+		return err
+	}
+
+	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] transaction category merchant table maintained successfully")
+
 	err = datastore.Container.UserDataStore.SyncStructs(new(models.TransactionTagGroup))
 
 	if err != nil {
