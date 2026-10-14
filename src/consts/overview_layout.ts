@@ -2,8 +2,10 @@ import type { PartialRecord } from '@/core/base.ts';
 import { DateRange } from '@/core/datetime.ts';
 import { AccountCategory } from '@/core/account.ts';
 import { TransactionType } from '@/core/transaction.ts';
+import { CategoryType } from '@/core/category.ts';
 import {
     type OverviewWidgetColorSettingItem,
+    type OverviewWidgetSettingItem,
     type OverviewWidgetTextboxSettingItem,
     type DesktopOverviewLayout,
     type DesktopOverviewWidgetDefinition,
@@ -41,6 +43,32 @@ const WIDGET_BACKGROUND_COLOR_SETTINGS: OverviewWidgetColorSettingItem[] = [
         settingName: 'darkBackgroundColor',
         displayName: 'Dark Mode Background Color'
     }
+];
+
+const CATEGORY_BUDGETS_WIDGET_SETTINGS: OverviewWidgetSettingItem[] = [
+    WIDGET_TITLE_SETTING,
+    {
+        settingType: 'customSelect',
+        settingName: 'categoryType',
+        displayName: 'Category Type',
+        selectValues: [
+            { name: 'Expense', value: CategoryType.Expense },
+            { name: 'Income', value: CategoryType.Income }
+        ]
+    },
+    {
+        settingType: 'itemCountSelect',
+        settingName: 'itemCount',
+        displayName: 'Item Count',
+        itemCountValues: [3, 4, 5, 6, 7, 8, 9, 10]
+    }
+];
+
+const CATEGORY_BUDGETS_WIDGET_DATA_REQUIREMENTS: OverviewWidgetDataRequirement[] = [
+    OverviewWidgetDataRequirement.Accounts,
+    OverviewWidgetDataRequirement.TransactionCategories,
+    OverviewWidgetDataRequirement.TransactionCategoryStatistics,
+    OverviewWidgetDataRequirement.CategoryBudgets
 ];
 
 export const DESKTOP_OVERVIEW_WIDGET_DEFINITIONS: PartialRecord<OverviewWidgetType, DesktopOverviewWidgetDefinition> = {
@@ -390,6 +418,20 @@ export const DESKTOP_OVERVIEW_WIDGET_DEFINITIONS: PartialRecord<OverviewWidgetTy
         dataRequirements: [
             OverviewWidgetDataRequirement.DailyTransactionAmounts
         ]
+    },
+    [OverviewWidgetType.CategoryBudgets]: {
+        type: OverviewWidgetType.CategoryBudgets,
+        name: 'Category Budgets',
+        supportsSettings: CATEGORY_BUDGETS_WIDGET_SETTINGS,
+        defaultSettings: {
+            categoryType: CategoryType.Expense,
+            itemCount: 4
+        },
+        defaultWidth: 4,
+        defaultHeight: 6,
+        minWidth: 3,
+        minHeight: 3,
+        dataRequirements: CATEGORY_BUDGETS_WIDGET_DATA_REQUIREMENTS
     }
 };
 
@@ -606,6 +648,16 @@ export const MOBILE_OVERVIEW_WIDGET_DEFINITIONS: PartialRecord<OverviewWidgetTyp
         dataRequirements: [
             OverviewWidgetDataRequirement.TransactionOverview
         ]
+    },
+    [OverviewWidgetType.CategoryBudgets]: {
+        type: OverviewWidgetType.CategoryBudgets,
+        name: 'Category Budgets',
+        supportsSettings: CATEGORY_BUDGETS_WIDGET_SETTINGS,
+        defaultSettings: {
+            categoryType: CategoryType.Expense,
+            itemCount: 4
+        },
+        dataRequirements: CATEGORY_BUDGETS_WIDGET_DATA_REQUIREMENTS
     }
 };
 

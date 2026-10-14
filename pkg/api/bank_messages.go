@@ -33,6 +33,7 @@ type BankMessagesApi struct {
 	settings              *services.BankMessageSettingsService
 	outbox                *services.BankMessageOutboxService
 	transactionCategories *services.TransactionCategoryService
+	merchants             *services.TransactionCategoryMerchantService
 	accounts              *services.AccountService
 	users                 *services.UserService
 	transactions          *services.TransactionService
@@ -45,6 +46,7 @@ var BankMessages = &BankMessagesApi{
 	settings:              services.BankMessageSettings,
 	outbox:                services.BankMessageOutbox,
 	transactionCategories: services.TransactionCategories,
+	merchants:             services.TransactionCategoryMerchants,
 	accounts:              services.Accounts,
 	users:                 services.Users,
 	transactions:          services.Transactions,
@@ -249,7 +251,13 @@ func (a *BankMessagesApi) process(c core.Context, setting *models.BankMessageAut
 		return nil, errs.Or(err, errs.ErrOperationFailed)
 	}
 
-	categoryOptions, categoryMap := bankMessageCategoryData(categories)
+	merchants, err := a.merchants.GetAllMerchantsByUid(c, setting.Uid)
+
+	if err != nil {
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	categoryOptions, categoryLookup := bankMessageCategoryData(categories, merchants)
 	recognized, aiPreview, recognitionErr := a.recognize(c, setting, text, clientTimezone, categoryOptions)
 
 	if recognitionErr != nil {
@@ -269,11 +277,14 @@ func (a *BankMessagesApi) process(c core.Context, setting *models.BankMessageAut
 		return response, nil
 	}
 
-	category, exists := categoryMap[recognized.TransactionType+"\x00"+recognized.Category]
+	category, categorySource := categoryLookup.resolve(recognized.TransactionType, recognized.Category, recognized.StoreName)
 
-	if !exists {
+	if category == nil {
 		return bankMessageProcessError(response, create, errs.ErrBankMessageCategoryNotFound)
 	}
+
+	response.Category = categoryLookup.paths[category.CategoryId]
+	response.CategorySource = categorySource
 
 	accountId, accountErr := a.identifyAccount(c, setting, text)
 
@@ -564,38 +575,106 @@ func bindBankMessageRequest(c *core.WebContext) (*models.BankMessageIngestReques
 }
 
 type bankMessageCategoryPromptItem struct {
-	Name     string `json:"name"`
-	Guidance string `json:"guidance,omitempty"`
+	Name      string   `json:"name"`
+	Guidance  string   `json:"guidance,omitempty"`
+	Merchants []string `json:"merchants,omitempty"`
 }
 
-func bankMessageCategoryData(categories []*models.TransactionCategory) (map[string][]bankMessageCategoryPromptItem, map[string]*models.TransactionCategory) {
+// bankMessageCategoryLookup resolves the category chosen by the AI, or the category a recognized merchant is mapped to
+type bankMessageCategoryLookup struct {
+	byName     map[string]*models.TransactionCategory
+	byMerchant map[string]*models.TransactionCategory
+	paths      map[int64]string
+}
+
+const bankMessageCategoryPathSeparator = " > "
+
+func bankMessageCategoryLookupKey(typeName string, value string) string {
+	return typeName + "\x00" + value
+}
+
+func bankMessageCategoryTypeName(categoryType models.TransactionCategoryType) string {
+	switch categoryType {
+	case models.CATEGORY_TYPE_INCOME:
+		return "income"
+	case models.CATEGORY_TYPE_EXPENSE:
+		return "expense"
+	default:
+		return ""
+	}
+}
+
+func bankMessageCategoryData(categories []*models.TransactionCategory, merchants []*models.TransactionCategoryMerchant) (map[string][]bankMessageCategoryPromptItem, *bankMessageCategoryLookup) {
 	options := map[string][]bankMessageCategoryPromptItem{
 		"income":  {},
 		"expense": {},
 	}
-	categoryMap := make(map[string]*models.TransactionCategory)
+	lookup := &bankMessageCategoryLookup{
+		byName:     make(map[string]*models.TransactionCategory),
+		byMerchant: make(map[string]*models.TransactionCategory),
+		paths:      make(map[int64]string),
+	}
+	primaryCategories := make(map[int64]*models.TransactionCategory)
+	categoriesById := make(map[int64]*models.TransactionCategory)
+	nameCounts := make(map[string]int)
 
 	for _, category := range categories {
-		if category.Hidden || category.ParentCategoryId == models.LevelOneTransactionCategoryParentId {
+		if category.ParentCategoryId == models.LevelOneTransactionCategoryParentId {
+			primaryCategories[category.CategoryId] = category
+		}
+	}
+
+	for _, category := range categories {
+		typeName := bankMessageCategoryTypeName(category.Type)
+
+		if category.Hidden || category.ParentCategoryId == models.LevelOneTransactionCategoryParentId || typeName == "" {
 			continue
 		}
 
-		typeName := ""
+		path := category.Name
 
-		switch category.Type {
-		case models.CATEGORY_TYPE_INCOME:
-			typeName = "income"
-		case models.CATEGORY_TYPE_EXPENSE:
-			typeName = "expense"
+		if parent := primaryCategories[category.ParentCategoryId]; parent != nil && parent.Name != "" {
+			path = parent.Name + bankMessageCategoryPathSeparator + category.Name
 		}
 
-		if typeName != "" {
-			options[typeName] = append(options[typeName], bankMessageCategoryPromptItem{
-				Name:     category.Name,
-				Guidance: strings.TrimSpace(category.AiGuidance),
-			})
-			categoryMap[typeName+"\x00"+category.Name] = category
+		categoriesById[category.CategoryId] = category
+		lookup.paths[category.CategoryId] = path
+		lookup.byName[bankMessageCategoryLookupKey(typeName, path)] = category
+		nameCounts[bankMessageCategoryLookupKey(typeName, category.Name)]++
+	}
+
+	// also accept the bare secondary category name when it is unambiguous within its type
+	for categoryId, category := range categoriesById {
+		key := bankMessageCategoryLookupKey(bankMessageCategoryTypeName(category.Type), category.Name)
+
+		if _, exists := lookup.byName[key]; !exists && nameCounts[key] == 1 {
+			lookup.byName[key] = categoriesById[categoryId]
 		}
+	}
+
+	merchantNames := make(map[int64][]string)
+
+	for _, merchant := range merchants {
+		category := categoriesById[merchant.CategoryId]
+
+		if category == nil {
+			continue
+		}
+
+		lookup.byMerchant[bankMessageCategoryLookupKey(bankMessageCategoryTypeName(category.Type), merchant.MerchantKey)] = category
+		merchantNames[category.CategoryId] = append(merchantNames[category.CategoryId], merchant.Merchant)
+	}
+
+	for categoryId, category := range categoriesById {
+		typeName := bankMessageCategoryTypeName(category.Type)
+		names := merchantNames[categoryId]
+		sort.Strings(names)
+
+		options[typeName] = append(options[typeName], bankMessageCategoryPromptItem{
+			Name:      lookup.paths[categoryId],
+			Guidance:  strings.TrimSpace(category.AiGuidance),
+			Merchants: names,
+		})
 	}
 
 	for typeName := range options {
@@ -604,7 +683,23 @@ func bankMessageCategoryData(categories []*models.TransactionCategory) (map[stri
 		})
 	}
 
-	return options, categoryMap
+	return options, lookup
+}
+
+// resolve returns the category of a recognized transaction and where it came from:
+// a merchant rule set by the user takes precedence over the category chosen by the AI
+func (l *bankMessageCategoryLookup) resolve(typeName string, categoryName string, storeName string) (*models.TransactionCategory, string) {
+	if merchantKey := models.GetMerchantKey(storeName); merchantKey != "" {
+		if category := l.byMerchant[bankMessageCategoryLookupKey(typeName, merchantKey)]; category != nil {
+			return category, "merchant"
+		}
+	}
+
+	if category := l.byName[bankMessageCategoryLookupKey(typeName, strings.TrimSpace(categoryName))]; category != nil {
+		return category, "ai"
+	}
+
+	return nil, ""
 }
 
 func bankMessageTransactionTypes(typeName string) (models.TransactionType, models.TransactionDbType, *errs.Error) {

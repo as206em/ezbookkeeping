@@ -49,6 +49,11 @@
                                          :transaction-type="widget.settings['transactionType'] as TransactionType"
                                          :months="widget.settings['months'] as number"
                                          v-else-if="widget.type === OverviewWidgetType.TransactionCalendarHeatmap" />
+
+    <category-budgets-widget :loading="loading" :title="widgetTitle"
+                             :category-type="widget.settings['categoryType'] as CategoryType"
+                             :item-count="widget.settings['itemCount'] as number"
+                             v-else-if="widget.type === OverviewWidgetType.CategoryBudgets" />
 </template>
 
 <script setup lang="ts">
@@ -65,8 +70,10 @@ import AccountBalanceListWidget from './widgets/AccountBalanceListWidget.vue';
 import ExpenseCategoryRankingWidget from './widgets/ExpenseCategoryRankingWidget.vue';
 import RecentTransactionsWidget from './widgets/RecentTransactionsWidget.vue';
 import TransactionCalendarHeatmapWidget from './widgets/TransactionCalendarHeatmapWidget.vue';
+import CategoryBudgetsWidget from './widgets/CategoryBudgetsWidget.vue';
 
 import { TransactionType } from '@/core/transaction.ts';
+import type { CategoryType } from '@/core/category.ts';
 import {
     type DesktopOverviewWidgetLayout,
     OverviewWidgetType

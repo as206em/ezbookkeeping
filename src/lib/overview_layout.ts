@@ -1,4 +1,5 @@
 import { type PartialRecord, entries, keys } from '@/core/base.ts';
+import { DateRange } from '@/core/datetime.ts';
 import {
     type OverviewWidgetSettingValue,
     type OverviewWidgetSettingItem,
@@ -215,6 +216,12 @@ export function getOverviewTransactionCategoryStatisticDateTypes(layout: Overvie
     const existingDateTypes: Record<number, boolean> = {};
 
     for (const widget of layout.widgets) {
+        if (widget.type === OverviewWidgetType.CategoryBudgets && !existingDateTypes[DateRange.ThisMonth.type]) {
+            dateTypes.push(DateRange.ThisMonth.type);
+            existingDateTypes[DateRange.ThisMonth.type] = true;
+            continue;
+        }
+
         if (widget.type !== OverviewWidgetType.ExpenseCategoryRanking) {
             continue;
         }

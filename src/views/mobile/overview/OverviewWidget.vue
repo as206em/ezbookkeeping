@@ -17,6 +17,11 @@
 
     <period-income-expense-widget :loading="loading" :date-ranges="widget.settings['dateRanges'] as number[]"
                                   v-else-if="widget.type === OverviewWidgetType.PeriodIncomeExpense" />
+
+    <category-budgets-widget :loading="loading" :title="widgetTitle"
+                             :category-type="widget.settings['categoryType'] as CategoryType"
+                             :item-count="widget.settings['itemCount'] as number"
+                             v-else-if="widget.type === OverviewWidgetType.CategoryBudgets" />
 </template>
 
 <script setup lang="ts">
@@ -26,8 +31,10 @@ import AssetSummaryWidget from './widgets/AssetSummaryWidget.vue';
 import AccountBalanceListWidget from './widgets/AccountBalanceListWidget.vue';
 import MonthlyExpenseOverviewWidget from './widgets/MonthlyExpenseOverviewWidget.vue';
 import PeriodIncomeExpenseWidget from './widgets/PeriodIncomeExpenseWidget.vue';
+import CategoryBudgetsWidget from './widgets/CategoryBudgetsWidget.vue';
 
 import type { ColorValue } from '@/core/color.ts';
+import type { CategoryType } from '@/core/category.ts';
 import { type MobileOverviewWidgetLayout, OverviewWidgetType } from '@/core/overview_layout.ts';
 
 const props = defineProps<{

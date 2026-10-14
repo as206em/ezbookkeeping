@@ -530,6 +530,7 @@ import { useTransactionCategoriesStore } from '@/stores/transactionCategory.ts';
 import { useTransactionTagsStore } from '@/stores/transactionTag.ts';
 import { useTransactionsStore } from '@/stores/transaction.ts';
 import { useTransactionTemplatesStore } from '@/stores/transactionTemplate.ts';
+import { useTransactionCategoryMerchantsStore } from '@/stores/transactionCategoryMerchant.ts';
 
 import type { Coordinate } from '@/core/coordinate.ts';
 import { CategoryType } from '@/core/category.ts';
@@ -566,6 +567,7 @@ import {
 } from '@/lib/map/index.ts';
 import { compressJpgImageByQuality } from '@/lib/ui/common.ts';
 import logger from '@/lib/logger.ts';
+import { getMerchantToRemember } from '@/lib/category_merchant.ts';
 
 import {
     mdiMagicStaff,
@@ -667,6 +669,7 @@ const settingsStore = useSettingsStore();
 const userStore = useUserStore();
 const accountsStore = useAccountsStore();
 const transactionCategoriesStore = useTransactionCategoriesStore();
+const transactionCategoryMerchantsStore = useTransactionCategoryMerchantsStore();
 const transactionTagsStore = useTransactionTagsStore();
 const transactionsStore = useTransactionsStore();
 const transactionTemplatesStore = useTransactionTemplatesStore();
@@ -895,6 +898,34 @@ function open(options: TransactionEditOptions): Promise<TransactionEditResponse 
     });
 }
 
+// After the category of an existing transaction is changed by hand, offer to always use that category for its merchant
+function offerMerchantCategoryRule(oldCategoryId: string, savedTransaction: Transaction): void {
+    if (savedTransaction.type !== TransactionType.Expense && savedTransaction.type !== TransactionType.Income) {
+        return;
+    }
+
+    transactionCategoryMerchantsStore.loadAllMerchants({ force: false }).then(() => {
+        const newCategory = transactionCategoriesStore.allTransactionCategoriesMap[savedTransaction.getCategoryId()];
+        const merchant = getMerchantToRemember(savedTransaction.comment, oldCategoryId, newCategory, transactionCategoryMerchantsStore.getCategoryIdByMerchant);
+
+        if (!merchant || !newCategory) {
+            return;
+        }
+
+        confirmDialog.value?.open('Remember this category?', `Always put "${merchant}" in "${newCategory.name}" when it comes from a bank SMS? You can change this later in the category settings.`).then(() => {
+            transactionCategoryMerchantsStore.addMerchant({ categoryId: newCategory.id, merchant }).then(() => {
+                snackbar.value?.showMessage(`${merchant} will now go to ${newCategory.name}`);
+            }).catch(error => {
+                if (!error.processed) {
+                    snackbar.value?.showError(error);
+                }
+            });
+        });
+    }).catch(error => {
+        logger.warn('failed to load merchant rules', error);
+    });
+}
+
 function save(afterAction: AfterSaveAction): void {
     const problemMessage = inputEmptyProblemMessage.value;
 
@@ -906,6 +937,8 @@ function save(afterAction: AfterSaveAction): void {
     if (props.type === TransactionEditPageType.Transaction && (mode.value === TransactionEditPageMode.Add || mode.value === TransactionEditPageMode.Edit)) {
         const doSubmit = function () {
             submitting.value = true;
+            const oldCategoryId = mode.value === TransactionEditPageMode.Edit && initTransaction.value ? initTransaction.value.getCategoryId() : '';
+            const savedTransaction = transaction.value as Transaction;
 
             transactionsStore.saveTransaction({
                 transaction: transaction.value as Transaction,
@@ -938,6 +971,10 @@ function save(afterAction: AfterSaveAction): void {
                     }
 
                     showState.value = false;
+
+                    if (oldCategoryId) {
+                        offerMerchantCategoryRule(oldCategoryId, savedTransaction);
+                    }
                 }
             }).catch(error => {
                 submitting.value = false;

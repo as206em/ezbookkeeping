@@ -40,6 +40,8 @@ export interface BankMessageProcessResponse {
     reason?: string;
     previewError?: string;
     matchedAccountId?: string;
+    category?: string;
+    categorySource?: 'ai' | 'merchant';
     recognized?: RecognizedBankMessage;
     transaction?: TransactionInfoResponse;
     aiPreview?: BankMessageAIPreview;

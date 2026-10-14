@@ -42,6 +42,15 @@ import type {
     AccountDeleteRequest
 } from '@/models/account.ts';
 import type {
+    TransactionCategoryMerchantInfoResponse,
+    TransactionCategoryMerchantAddRequest,
+    TransactionCategoryMerchantDeleteRequest
+} from '@/models/transaction_category_merchant.ts';
+import type {
+    CategoryBudgetInfoResponse,
+    CategoryBudgetSaveRequest
+} from '@/models/transaction_category_budget.ts';
+import type {
     BankMessageAutomationSettingRequest,
     BankMessageAutomationSettingResponse,
     BankMessageOutboxItem,
@@ -444,6 +453,21 @@ export default {
     },
     getUserApplicationCloudSettings: (): ApiResponsePromise<ApplicationCloudSetting[] | false> => {
         return axios.get<ApiResponse<ApplicationCloudSetting[] | false>>('v1/users/settings/cloud/get.json');
+    },
+    getAllCategoryMerchants: (): ApiResponsePromise<TransactionCategoryMerchantInfoResponse[]> => {
+        return axios.get<ApiResponse<TransactionCategoryMerchantInfoResponse[]>>('v1/transaction/categories/merchants/list.json');
+    },
+    addCategoryMerchant: (req: TransactionCategoryMerchantAddRequest): ApiResponsePromise<TransactionCategoryMerchantInfoResponse> => {
+        return axios.post<ApiResponse<TransactionCategoryMerchantInfoResponse>>('v1/transaction/categories/merchants/add.json', req);
+    },
+    deleteCategoryMerchant: (req: TransactionCategoryMerchantDeleteRequest): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/transaction/categories/merchants/delete.json', req);
+    },
+    getAllCategoryBudgets: (): ApiResponsePromise<CategoryBudgetInfoResponse[]> => {
+        return axios.get<ApiResponse<CategoryBudgetInfoResponse[]>>('v1/transaction/categories/budgets/list.json');
+    },
+    saveCategoryBudgets: (req: CategoryBudgetSaveRequest): ApiResponsePromise<CategoryBudgetInfoResponse[]> => {
+        return axios.post<ApiResponse<CategoryBudgetInfoResponse[]>>('v1/transaction/categories/budgets/save.json', req);
     },
     getBankMessageSettings: (): ApiResponsePromise<BankMessageAutomationSettingResponse> => {
         return axios.get<ApiResponse<BankMessageAutomationSettingResponse>>('v1/bank-messages/settings.json');

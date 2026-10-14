@@ -538,6 +538,7 @@ import { useTransactionCategoriesStore } from '@/stores/transactionCategory.ts';
 import { useTransactionTagsStore } from '@/stores/transactionTag.ts';
 import { useTransactionsStore } from '@/stores/transaction.ts';
 import { useTransactionTemplatesStore } from '@/stores/transactionTemplate.ts';
+import { useTransactionCategoryMerchantsStore } from '@/stores/transactionCategoryMerchant.ts';
 
 import { CategoryType } from '@/core/category.ts';
 import {
@@ -575,6 +576,7 @@ import {
 } from '@/lib/server_settings.ts';
 import { compressJpgImageByQuality } from '@/lib/ui/common.ts';
 import logger from '@/lib/logger.ts';
+import { getMerchantToRemember } from '@/lib/category_merchant.ts';
 
 const props = defineProps<{
     f7route: Router.Route;
@@ -660,6 +662,9 @@ const settingsStore = useSettingsStore();
 const userStore = useUserStore();
 const accountsStore = useAccountsStore();
 const transactionCategoriesStore = useTransactionCategoriesStore();
+const transactionCategoryMerchantsStore = useTransactionCategoryMerchantsStore();
+
+const originalCategoryId = ref<string>('');
 const transactionTagsStore = useTransactionTagsStore();
 const transactionsStore = useTransactionsStore();
 const transactionTemplatesStore = useTransactionTemplatesStore();
@@ -1018,6 +1023,7 @@ function init(): void {
         if (pageTypeAndMode.type === TransactionEditPageType.Transaction) {
             if (query['id'] && responses[4] instanceof Transaction) {
                 fromTransaction = responses[4];
+                originalCategoryId.value = responses[4].getCategoryId();
             } else if (query['templateId'] && transactionTemplatesStore.allTransactionTemplatesMap && transactionTemplatesStore.allTransactionTemplatesMap[TemplateType.Normal.type]) {
                 fromTransaction = (transactionTemplatesStore.allTransactionTemplatesMap[TemplateType.Normal.type] as Record<string, TransactionTemplate>)[query['templateId']] ?? null;
 
@@ -1088,6 +1094,34 @@ function init(): void {
     });
 }
 
+// After the category of an existing transaction is changed by hand, offer to always use that category for its merchant
+function offerMerchantCategoryRule(oldCategoryId: string, savedTransaction: Transaction): void {
+    if (savedTransaction.type !== TransactionType.Expense && savedTransaction.type !== TransactionType.Income) {
+        return;
+    }
+
+    transactionCategoryMerchantsStore.loadAllMerchants({ force: false }).then(() => {
+        const newCategory = transactionCategoriesStore.allTransactionCategoriesMap[savedTransaction.getCategoryId()];
+        const merchant = getMerchantToRemember(savedTransaction.comment, oldCategoryId, newCategory, transactionCategoryMerchantsStore.getCategoryIdByMerchant);
+
+        if (!merchant || !newCategory) {
+            return;
+        }
+
+        showConfirm(`Always put "${merchant}" in "${newCategory.name}" when it comes from a bank SMS? You can change this later in the category settings.`, () => {
+            transactionCategoryMerchantsStore.addMerchant({ categoryId: newCategory.id, merchant }).then(() => {
+                showToast(`${merchant} will now go to ${newCategory.name}`);
+            }).catch(error => {
+                if (!error.processed) {
+                    showToast(error.message || error);
+                }
+            });
+        });
+    }).catch(error => {
+        logger.warn('failed to load merchant rules', error);
+    });
+}
+
 function save(afterAction: AfterSaveAction): void {
     const router = props.f7router;
 
@@ -1106,6 +1140,8 @@ function save(afterAction: AfterSaveAction): void {
         const doSubmit = function () {
             submitting.value = true;
             showLoading(() => submitting.value);
+            const oldCategoryId = mode.value === TransactionEditPageMode.Edit ? originalCategoryId.value : '';
+            const savedTransaction = transaction.value as Transaction;
 
             transactionsStore.saveTransaction({
                 transaction: transaction.value as Transaction,
@@ -1133,6 +1169,10 @@ function save(afterAction: AfterSaveAction): void {
                     }
 
                     router.back();
+
+                    if (oldCategoryId) {
+                        offerMerchantCategoryRule(oldCategoryId, savedTransaction);
+                    }
                 }
             }).catch(error => {
                 submitting.value = false;

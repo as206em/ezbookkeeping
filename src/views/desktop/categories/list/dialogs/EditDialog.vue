@@ -81,6 +81,10 @@
                                 v-model="category.aiGuidance"
                             />
                         </v-col>
+                        <v-col cols="12" md="12" v-if="editCategoryId && canCategoryHaveMerchants(category)">
+                            <category-merchants-editor :category-id="editCategoryId" :disabled="loading || submitting"
+                                                       @error="onMerchantError" @message="snackbar?.showMessage($event)" />
+                        </v-col>
                         <v-col class="py-0 my-n2" cols="12" md="12" v-if="editCategoryId">
                             <v-switch :disabled="loading || submitting"
                                       :label="tt('Visible')" v-model="category.visible"/>
@@ -110,6 +114,7 @@
 
 <script setup lang="ts">
 import SnackBar from '@/components/desktop/SnackBar.vue';
+import CategoryMerchantsEditor from './CategoryMerchantsEditor.vue';
 
 import { ref, computed, useTemplateRef } from 'vue';
 
@@ -127,6 +132,7 @@ import { TransactionCategory } from '@/models/transaction_category.ts';
 import { isEquals } from '@/lib/common.ts';
 import { getCategoryIconType } from '@/lib/icon.ts';
 import { generateRandomUUID } from '@/lib/misc.ts';
+import { canCategoryHaveMerchants } from '@/lib/category_merchant.ts';
 
 interface TransactionCategoryEditResponse {
     message: string;
@@ -157,6 +163,13 @@ let rejectFunc: ((reason?: unknown) => void) | null = null;
 
 const showState = ref<boolean>(false);
 const initCategory = ref<TransactionCategory | null>(null);
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function onMerchantError(error: any): void {
+    if (!error?.processed) {
+        snackbar.value?.showError(error);
+    }
+}
 
 const isCategoryModified = computed<boolean>(() => {
     if (!editCategoryId.value) { // Add

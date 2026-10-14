@@ -55,6 +55,10 @@
                         <f7-icon class="list-item-checked-icon" f7="checkmark_alt" v-if="analysisType === StatisticsAnalysisType.AssetTrends && query.chartDataType === dataType.type"></f7-icon>
                     </template>
                 </f7-list-item>
+                <f7-list-item group-title>
+                    <small>Budgets</small>
+                </f7-list-item>
+                <f7-list-item link="/statistic/budget" no-chevron popover-close title="Budget vs. Actual"></f7-list-item>
             </f7-list>
         </f7-popover>
 

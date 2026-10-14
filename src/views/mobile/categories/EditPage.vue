@@ -157,11 +157,29 @@
                 v-if="category.parentId !== '0'"
             ></f7-list-input>
         </f7-list>
+
+        <template v-if="!loading && editCategoryId && canCategoryHaveMerchants(category)">
+            <f7-block-title>Always use this category for</f7-block-title>
+            <f7-block class="margin-vertical-half">
+                Bank SMS transactions from these merchants are put in this category without asking the AI. A merchant can belong to only one category.
+            </f7-block>
+            <f7-list strong inset dividers :class="{ disabled: updatingMerchants }">
+                <f7-list-item :key="merchant.merchant" :title="merchant.merchant" v-for="merchant in categoryMerchants">
+                    <template #after>
+                        <f7-link icon-f7="xmark_circle" @click="removeMerchant(merchant.merchant)"></f7-link>
+                    </template>
+                </f7-list-item>
+                <f7-list-input type="text" placeholder="Merchant name, e.g. Carrefour"
+                               :maxlength="CATEGORY_MERCHANT_MAX_LENGTH"
+                               :value="newMerchant" @input="newMerchant = $event.target.value"></f7-list-input>
+                <f7-list-button :class="{ disabled: !newMerchant.trim() }" @click="addMerchant">Add merchant</f7-list-button>
+            </f7-list>
+        </template>
     </f7-page>
 </template>
 
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, computed } from 'vue';
 import type { Router } from 'framework7/types';
 
 import { useI18n } from '@/locales/helpers.ts';
@@ -169,6 +187,7 @@ import { useI18nUIComponents, showLoading, hideLoading } from '@/lib/ui/mobile.t
 import { useCategoryEditPageBase } from '@/views/base/categories/CategoryEditPageBase.ts';
 
 import { useTransactionCategoriesStore } from '@/stores/transactionCategory.ts';
+import { useTransactionCategoryMerchantsStore } from '@/stores/transactionCategoryMerchant.ts';
 
 import type { ColorValue } from '@/core/color.ts';
 import { CategoryType } from '@/core/category.ts';
@@ -178,6 +197,7 @@ import { TransactionCategory } from '@/models/transaction_category.ts';
 
 import { getCategoryIconType } from '@/lib/icon.ts';
 import { generateRandomUUID } from '@/lib/misc.ts';
+import { CATEGORY_MERCHANT_MAX_LENGTH, canCategoryHaveMerchants, normalizeMerchantName } from '@/lib/category_merchant.ts';
 
 const props = defineProps<{
     f7route: Router.Route;
@@ -201,6 +221,13 @@ const {
 } = useCategoryEditPageBase(query['type'] ? parseInt(query['type']) as CategoryType : undefined, query['parentId']);
 
 const transactionCategoriesStore = useTransactionCategoriesStore();
+const merchantsStore = useTransactionCategoryMerchantsStore();
+
+const newMerchant = ref<string>('');
+const updatingMerchants = ref<boolean>(false);
+
+const categoryMerchants = computed(() => editCategoryId.value ? merchantsStore.getMerchantsByCategoryId(editCategoryId.value)
+    .slice().sort((a, b) => a.merchant.localeCompare(b.merchant)) : []);
 
 const loadingError = ref<unknown | null>(null);
 const showPrimaryCategorySheet = ref<boolean>(false);
@@ -296,9 +323,51 @@ function save(): void {
     });
 }
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function showMerchantError(error: any): void {
+    if (!error?.processed) {
+        showToast(error?.message || error);
+    }
+}
+
+function addMerchant(): void {
+    const merchant = normalizeMerchantName(newMerchant.value);
+
+    if (!merchant || !editCategoryId.value) {
+        return;
+    }
+
+    const previousCategoryId = merchantsStore.getCategoryIdByMerchant(merchant);
+    updatingMerchants.value = true;
+
+    merchantsStore.addMerchant({ categoryId: editCategoryId.value, merchant }).then(() => {
+        updatingMerchants.value = false;
+        newMerchant.value = '';
+
+        if (previousCategoryId && previousCategoryId !== editCategoryId.value) {
+            showToast(`${merchant} was moved to this category`);
+        }
+    }).catch(error => {
+        updatingMerchants.value = false;
+        showMerchantError(error);
+    });
+}
+
+function removeMerchant(merchant: string): void {
+    updatingMerchants.value = true;
+
+    merchantsStore.deleteMerchant({ merchant }).then(() => {
+        updatingMerchants.value = false;
+    }).catch(error => {
+        updatingMerchants.value = false;
+        showMerchantError(error);
+    });
+}
+
 function onPageAfterIn(): void {
     routeBackOnError(props.f7router, loadingError);
 }
 
 init();
+merchantsStore.loadAllMerchants({ force: true }).catch(showMerchantError);
 </script>

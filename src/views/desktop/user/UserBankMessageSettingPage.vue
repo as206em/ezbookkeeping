@@ -240,6 +240,8 @@ const processedPreviewResult = computed(() => {
         reason: previewResult.value.reason,
         previewError: previewResult.value.previewError,
         matchedAccountId: previewResult.value.matchedAccountId,
+        category: previewResult.value.category,
+        categorySource: previewResult.value.categorySource,
         recognized: previewResult.value.recognized,
         transaction: previewResult.value.transaction
     };
