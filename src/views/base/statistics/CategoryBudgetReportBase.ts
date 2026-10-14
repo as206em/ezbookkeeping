@@ -34,12 +34,11 @@ import {
     getBudgetMonthProgress,
     getDaysInMonth,
     getTextualYearMonth,
-    parseTextualYearMonth,
     shiftYearMonth,
     sumAmountsByPrimaryCategory
 } from '@/lib/category_budget.ts';
 import { parseBigDecimal } from '@/lib/numeral.ts';
-import { getCurrentDateTime, getYearMonthDayDateTime, getYearMonthFirstUnixTime, getYearMonthLastUnixTime } from '@/lib/datetime.ts';
+import { getCurrentDateTime, getYearMonthDayDateTime, parseDateTimeFromUnixTime, getYearMonthFirstUnixTime, getYearMonthLastUnixTime } from '@/lib/datetime.ts';
 import services from '@/lib/services.ts';
 
 export const CATEGORY_BUDGET_HISTORY_MONTHS_OPTIONS: number[] = [6, 12];
@@ -53,11 +52,10 @@ export interface CategoryBudgetDailyDetail {
 
 export function getTodayYearMonthDay(): YearMonthDayValue {
     const now = getCurrentDateTime();
-    const yearMonth = parseTextualYearMonth(now.getGregorianCalendarYearDashMonth()) as number;
 
     return {
-        year: Math.floor(yearMonth / 100),
-        month: yearMonth % 100,
+        year: now.getGregorianCalendarYear(),
+        month: now.getGregorianCalendarMonth(),
         day: now.getGregorianCalendarDay()
     };
 }
@@ -222,7 +220,7 @@ export function loadCategoryBudgetDailyDetail(categoryId: string, yearMonth: num
                 amount = exchanged.truncate().toDoubleNumber();
             }
 
-            const day = new Date(transaction.time * 1000).getDate();
+            const day = parseDateTimeFromUnixTime(transaction.time).getGregorianCalendarDay();
 
             if (day >= 1 && day <= dailyAmounts.length) {
                 dailyAmounts[day - 1] = (dailyAmounts[day - 1] ?? 0) + amount;
@@ -338,6 +336,11 @@ export function useCategoryBudgetReportBase() {
                 items[monthItem.year * 100 + monthItem.month] = monthItem.items;
             }
 
+            // the user moved to another month while this request was in flight
+            if (selectedYearMonth.value !== endYearMonth) {
+                return;
+            }
+
             monthlyStatisticItems.value = items;
             loadedEndYearMonth.value = endYearMonth;
         });
@@ -397,6 +400,30 @@ export function useCategoryBudgetReportBase() {
 }
 
 export const CATEGORY_BUDGET_AVERAGE_MONTHS: number = 3;
+const CATEGORY_BUDGET_START_MONTH_OPTION_COUNT: number = 12;
+
+// Rounds a monthly average up to a whole currency unit for use as a budget suggestion
+export function getSuggestedBudgetAmount(average: number): number {
+    return Math.ceil(average / 100) * 100;
+}
+
+export function useCategoryBudgetStartMonthOptions(currentYearMonth: number) {
+    const { getMonthDisplayName } = useCategoryBudgetDisplay();
+
+    return computed<{ title: string, value: number }[]>(() => {
+        const options: { title: string, value: number }[] = [];
+
+        for (let i = 0; i < CATEGORY_BUDGET_START_MONTH_OPTION_COUNT; i++) {
+            const yearMonth = shiftYearMonth(currentYearMonth, -i);
+            options.push({
+                title: getMonthDisplayName(yearMonth) + (i === 0 ? ' (this month)' : ''),
+                value: yearMonth
+            });
+        }
+
+        return options;
+    });
+}
 
 // Loads the monthly average of each primary category over the last full months, used as budget suggestions
 export function useCategoryBudgetAverageBase() {

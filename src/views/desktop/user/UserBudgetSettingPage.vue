@@ -12,7 +12,7 @@
                 <v-card-text>
                     <v-alert type="info" variant="tonal" class="mb-5">
                         Set a monthly budget for each primary expense category and a monthly target for each primary income category.
-                        Amounts are in your default currency ({{ defaultCurrency }}). Leave a category empty to stop tracking it.
+                        Amounts are in your default currency ({{ defaultCurrency }}). Set a category to 0 to stop tracking it.
                         "Fixed bill" suits rent, insurance or salary, which arrive once a month, so they are not judged against an even daily pace.
                     </v-alert>
 
@@ -28,8 +28,8 @@
                             />
                         </v-col>
                         <v-col cols="12" md="7" class="text-body-medium text-medium-emphasis">
-                            Saving replaces budgets from {{ getMonthDisplayName(startYearMonth) }} onward.
-                            Earlier months keep the budgets they had, so past reports stay accurate.
+                            Shows the budgets in effect in {{ getMonthDisplayName(startYearMonth) }}. Saving changes the categories you edit from that month onward;
+                            other categories and earlier months keep their budgets, so past reports stay accurate.
                         </v-col>
                     </v-row>
                 </v-card-text>
@@ -110,10 +110,17 @@
 <script setup lang="ts">
 import SnackBar from '@/components/desktop/SnackBar.vue';
 
-import { ref, computed, useTemplateRef } from 'vue';
+import { ref, computed, watch, useTemplateRef } from 'vue';
 
 import { useI18n } from '@/locales/helpers.ts';
-import { useCategoryBudgetDisplay, useCategoryBudgetAverageBase, getTodayYearMonthDay, CATEGORY_BUDGET_AVERAGE_MONTHS } from '@/views/base/statistics/CategoryBudgetReportBase.ts';
+import {
+    useCategoryBudgetDisplay,
+    useCategoryBudgetAverageBase,
+    useCategoryBudgetStartMonthOptions,
+    getSuggestedBudgetAmount,
+    getTodayYearMonthDay,
+    CATEGORY_BUDGET_AVERAGE_MONTHS
+} from '@/views/base/statistics/CategoryBudgetReportBase.ts';
 
 import { useAccountsStore } from '@/stores/account.ts';
 import { useTransactionCategoriesStore } from '@/stores/transactionCategory.ts';
@@ -123,7 +130,7 @@ import { CategoryType } from '@/core/category.ts';
 import type { TransactionCategory } from '@/models/transaction_category.ts';
 import { CategoryBudgetPaceType } from '@/models/transaction_category_budget.ts';
 
-import { getTextualYearMonth, shiftYearMonth } from '@/lib/category_budget.ts';
+import { getTextualYearMonth } from '@/lib/category_budget.ts';
 import { getCategoryIconType } from '@/lib/icon.ts';
 
 type SnackBarType = InstanceType<typeof SnackBar>;
@@ -158,19 +165,7 @@ const paceTypeOptions = [
     { title: 'Fixed bill', value: CategoryBudgetPaceType.Fixed }
 ];
 
-const startMonthOptions = computed(() => {
-    const options: { title: string, value: number }[] = [];
-
-    for (let i = 0; i < 12; i++) {
-        const yearMonth = shiftYearMonth(currentYearMonth, -i);
-        options.push({
-            title: getMonthDisplayName(yearMonth) + (i === 0 ? ' (this month)' : ''),
-            value: yearMonth
-        });
-    }
-
-    return options;
-});
+const startMonthOptions = useCategoryBudgetStartMonthOptions(currentYearMonth);
 
 const sections = computed(() => [
     {
@@ -214,14 +209,18 @@ function getSectionTotal(type: CategoryType): number {
 }
 
 function applyBudgets(): void {
-    const effective = budgetsStore.getEffectiveBudgets(currentYearMonth);
+    const effective = budgetsStore.getEffectiveBudgets(startYearMonth.value);
     const newForm: Record<string, BudgetFormItem> = {};
 
-    for (const [categoryId, budget] of Object.entries(effective)) {
-        newForm[categoryId] = {
-            amount: budget.amount,
-            paceType: budget.paceType
-        };
+    for (const type of [CategoryType.Expense, CategoryType.Income]) {
+        for (const category of transactionCategoriesStore.allTransactionCategories[type] ?? []) {
+            const budget = effective[category.id];
+
+            newForm[category.id] = {
+                amount: budget?.amount ?? 0,
+                paceType: budget?.paceType ?? CategoryBudgetPaceType.Even
+            };
+        }
     }
 
     form.value = newForm;
@@ -236,7 +235,7 @@ function fillFromAverages(): void {
             const item = getFormItem(category.id);
 
             if (!item.amount && average && average > 0) {
-                item.amount = Math.ceil(average / 100) * 100;
+                item.amount = getSuggestedBudgetAmount(average);
                 filled++;
             }
         }
@@ -298,6 +297,12 @@ function save(): void {
         }
     });
 }
+
+watch(startYearMonth, () => {
+    if (!loading.value) {
+        applyBudgets();
+    }
+});
 
 load();
 </script>

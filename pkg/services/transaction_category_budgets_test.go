@@ -84,7 +84,7 @@ func TestSaveBudgetsRecordsRemovalAndReplacesLaterMonths(t *testing.T) {
 		{CategoryId: 20, Amount: 30000},
 	}))
 
-	// saving from an earlier month replaces everything from that month onward
+	// saving from an earlier month replaces later changes of the categories that changed
 	require.NoError(t, TransactionCategoryBudgets.SaveBudgets(c, 1, 202607, []*models.TransactionCategoryBudget{
 		{CategoryId: 10, Amount: 60000},
 	}))
@@ -105,4 +105,31 @@ func TestSaveBudgetsRecordsRemovalAndReplacesLaterMonths(t *testing.T) {
 	budgets, err = TransactionCategoryBudgets.GetAllBudgetsByUid(c, 1)
 	require.NoError(t, err)
 	assert.Empty(t, budgets)
+}
+
+func TestSaveBudgetsFromEarlierMonthKeepsLaterChangesOfUnchangedCategories(t *testing.T) {
+	c := initializeCategoryBudgetServiceTest(t)
+
+	require.NoError(t, TransactionCategoryBudgets.SaveBudgets(c, 1, 202605, []*models.TransactionCategoryBudget{
+		{CategoryId: 10, Amount: 150000},
+		{CategoryId: 20, Amount: 90000},
+	}))
+	require.NoError(t, TransactionCategoryBudgets.SaveBudgets(c, 1, 202609, []*models.TransactionCategoryBudget{
+		{CategoryId: 10, Amount: 140000},
+		{CategoryId: 20, Amount: 90000},
+	}))
+
+	// backdate a change of category 20 only, with the form showing the budgets in effect in May
+	require.NoError(t, TransactionCategoryBudgets.SaveBudgets(c, 1, 202605, []*models.TransactionCategoryBudget{
+		{CategoryId: 10, Amount: 150000},
+		{CategoryId: 20, Amount: 80000},
+	}))
+
+	budgets, err := TransactionCategoryBudgets.GetAllBudgetsByUid(c, 1)
+	require.NoError(t, err)
+
+	assert.Equal(t, map[int32]map[int64]int64{
+		202605: {10: 150000, 20: 80000},
+		202609: {10: 140000},
+	}, budgetMap(budgets))
 }

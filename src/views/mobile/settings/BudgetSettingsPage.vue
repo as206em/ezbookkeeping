@@ -10,7 +10,7 @@
 
         <f7-block class="margin-vertical-half">
             Monthly budgets for expense categories and monthly targets for income categories, in {{ defaultCurrency }}.
-            Leave a category empty to stop tracking it. Use "Fixed bill" for rent, insurance or salary.
+            Leave a category empty or set it to 0 to stop tracking it. Use "Fixed bill" for rent, insurance or salary.
         </f7-block>
 
         <f7-list strong inset dividers :class="{ disabled: loading || saving }">
@@ -20,7 +20,7 @@
             </f7-list-input>
         </f7-list>
         <f7-block class="margin-vertical-half">
-            Saving replaces budgets from {{ getMonthDisplayName(startYearMonth) }} onward. Earlier months keep their budgets.
+            Shows the budgets in effect in {{ getMonthDisplayName(startYearMonth) }}. Saving changes the categories you edit from that month onward; other categories and earlier months keep their budgets.
         </f7-block>
 
         <template :key="section.type" v-for="section in sections">
@@ -54,12 +54,19 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, watch } from 'vue';
 import type { Router } from 'framework7/types';
 
 import { useI18n } from '@/locales/helpers.ts';
 import { useI18nUIComponents, showLoading, hideLoading } from '@/lib/ui/mobile.ts';
-import { useCategoryBudgetDisplay, useCategoryBudgetAverageBase, getTodayYearMonthDay, CATEGORY_BUDGET_AVERAGE_MONTHS } from '@/views/base/statistics/CategoryBudgetReportBase.ts';
+import {
+    useCategoryBudgetDisplay,
+    useCategoryBudgetAverageBase,
+    useCategoryBudgetStartMonthOptions,
+    getSuggestedBudgetAmount,
+    getTodayYearMonthDay,
+    CATEGORY_BUDGET_AVERAGE_MONTHS
+} from '@/views/base/statistics/CategoryBudgetReportBase.ts';
 
 import { useAccountsStore } from '@/stores/account.ts';
 import { useTransactionCategoriesStore } from '@/stores/transactionCategory.ts';
@@ -69,7 +76,7 @@ import { CategoryType } from '@/core/category.ts';
 import type { TransactionCategory } from '@/models/transaction_category.ts';
 import { CategoryBudgetPaceType } from '@/models/transaction_category_budget.ts';
 
-import { getTextualYearMonth, shiftYearMonth } from '@/lib/category_budget.ts';
+import { getTextualYearMonth } from '@/lib/category_budget.ts';
 import { getCategoryIconType } from '@/lib/icon.ts';
 import { parseBigDecimal } from '@/lib/numeral.ts';
 
@@ -96,19 +103,7 @@ const startYearMonth = ref<number>(currentYearMonth);
 const amountTexts = ref<Record<string, string>>({});
 const paceTypes = ref<Record<string, CategoryBudgetPaceType>>({});
 
-const startMonthOptions = computed(() => {
-    const options: { title: string, value: number }[] = [];
-
-    for (let i = 0; i < 12; i++) {
-        const yearMonth = shiftYearMonth(currentYearMonth, -i);
-        options.push({
-            title: getMonthDisplayName(yearMonth) + (i === 0 ? ' (this month)' : ''),
-            value: yearMonth
-        });
-    }
-
-    return options;
-});
+const startMonthOptions = useCategoryBudgetStartMonthOptions(currentYearMonth);
 
 const sections = computed(() => [
     {
@@ -128,7 +123,8 @@ function getBudgetableCategories(type: CategoryType): TransactionCategory[] {
         .filter(category => category.visible || getAmount(category.id) > 0);
 }
 
-function getAmount(categoryId: string): number {
+// returns the amount (in cents) of a category, 0 when empty, or null when the text is not a valid amount
+function parseCategoryAmount(categoryId: string): number | null {
     const text = amountTexts.value[categoryId];
 
     if (!text || !text.trim()) {
@@ -136,7 +132,11 @@ function getAmount(categoryId: string): number {
     }
 
     const amount = parseAmountFromLocalizedNumerals(text.trim());
-    return Number.isFinite(amount) ? amount : 0;
+    return Number.isFinite(amount) ? amount : null;
+}
+
+function getAmount(categoryId: string): number {
+    return parseCategoryAmount(categoryId) ?? 0;
 }
 
 function getSectionTotal(type: CategoryType): number {
@@ -159,7 +159,7 @@ function toAmountText(amount: number): string {
 }
 
 function applyBudgets(): void {
-    const effective = budgetsStore.getEffectiveBudgets(currentYearMonth);
+    const effective = budgetsStore.getEffectiveBudgets(startYearMonth.value);
     const texts: Record<string, string> = {};
     const paces: Record<string, CategoryBudgetPaceType> = {};
 
@@ -180,7 +180,7 @@ function fillFromAverages(): void {
             const average = averageAmounts.value[section.type]?.[category.id];
 
             if (getAmount(category.id) <= 0 && average && average > 0) {
-                amountTexts.value[category.id] = toAmountText(Math.ceil(average / 100) * 100);
+                amountTexts.value[category.id] = toAmountText(getSuggestedBudgetAmount(average));
                 filled++;
             }
         }
@@ -220,7 +220,12 @@ function save(): void {
 
     for (const type of [CategoryType.Expense, CategoryType.Income]) {
         for (const category of transactionCategoriesStore.allTransactionCategories[type] ?? []) {
-            const amount = getAmount(category.id);
+            const amount = parseCategoryAmount(category.id);
+
+            if (amount === null) {
+                showToast(`The budget of ${category.name} is not a valid amount`);
+                return;
+            }
 
             if (amount < 0) {
                 showToast(`The budget of ${category.name} cannot be negative`);
@@ -256,6 +261,12 @@ function save(): void {
         }
     });
 }
+
+watch(startYearMonth, () => {
+    if (!loading.value) {
+        applyBudgets();
+    }
+});
 
 function onPageAfterIn(): void {
     routeBackOnError(props.f7router, loadingError);

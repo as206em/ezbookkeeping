@@ -37,8 +37,10 @@ func (s *TransactionCategoryBudgetService) GetAllBudgetsByUid(c core.Context, ui
 	return budgets, err
 }
 
-// SaveBudgets replaces the budgets of a user from the given month onward.
-// Budgets of earlier months are kept, so reports of past months still use the budgets that applied then.
+// SaveBudgets sets the budgets of a user from the given month onward.
+// Only categories whose budget differs from the one already in effect in that month are changed: their rows from that
+// month onward are replaced. Other categories keep their later changes, and earlier months are never modified, so
+// reports of past months still use the budgets that applied then.
 // A category omitted from budgets (or with a zero amount) has no budget from that month.
 func (s *TransactionCategoryBudgetService) SaveBudgets(c core.Context, uid int64, startYearMonth int32, budgets []*models.TransactionCategoryBudget) error {
 	if uid <= 0 {
@@ -55,13 +57,15 @@ func (s *TransactionCategoryBudgetService) SaveBudgets(c core.Context, uid int64
 			return err
 		}
 
-		_, err = sess.Where("uid=? AND start_year_month>=?", uid, startYearMonth).Delete(&models.TransactionCategoryBudget{})
+		var startMonthBudgets []*models.TransactionCategoryBudget
+		err = sess.Where("uid=? AND start_year_month=?", uid, startYearMonth).Find(&startMonthBudgets)
 
 		if err != nil {
 			return err
 		}
 
 		previous := getEffectiveBudgets(earlierBudgets)
+		current := getEffectiveBudgets(append(append([]*models.TransactionCategoryBudget{}, earlierBudgets...), startMonthBudgets...))
 		desired := make(map[int64]*models.TransactionCategoryBudget, len(budgets))
 
 		for _, budget := range budgets {
@@ -70,48 +74,66 @@ func (s *TransactionCategoryBudgetService) SaveBudgets(c core.Context, uid int64
 			}
 		}
 
-		changed := make([]*models.TransactionCategoryBudget, 0, len(desired))
+		categoryIds := make(map[int64]bool, len(desired)+len(current))
 
-		for categoryId, budget := range desired {
-			if old, exists := previous[categoryId]; exists && old.Amount == budget.Amount && old.PaceType == budget.PaceType {
+		for categoryId := range desired {
+			categoryIds[categoryId] = true
+		}
+
+		for categoryId := range current {
+			categoryIds[categoryId] = true
+		}
+
+		for categoryId := range categoryIds {
+			newBudget := desired[categoryId]
+
+			if isSameBudget(current[categoryId], newBudget) {
 				continue
 			}
 
-			changed = append(changed, &models.TransactionCategoryBudget{
-				Uid:             uid,
-				CategoryId:      categoryId,
-				StartYearMonth:  startYearMonth,
-				Amount:          budget.Amount,
-				PaceType:        budget.PaceType,
-				CreatedUnixTime: now,
-				UpdatedUnixTime: now,
-			})
-		}
+			_, err = sess.Where("uid=? AND category_id=? AND start_year_month>=?", uid, categoryId, startYearMonth).Delete(&models.TransactionCategoryBudget{})
 
-		for categoryId, old := range previous {
-			if _, exists := desired[categoryId]; exists || old.Amount <= 0 {
+			if err != nil {
+				return err
+			}
+
+			if isSameBudget(previous[categoryId], newBudget) {
 				continue
 			}
 
-			changed = append(changed, &models.TransactionCategoryBudget{
+			row := &models.TransactionCategoryBudget{
 				Uid:             uid,
 				CategoryId:      categoryId,
 				StartYearMonth:  startYearMonth,
-				Amount:          0,
-				PaceType:        old.PaceType,
 				CreatedUnixTime: now,
 				UpdatedUnixTime: now,
-			})
-		}
+			}
 
-		for _, budget := range changed {
-			if _, err := sess.Insert(budget); err != nil {
+			if newBudget != nil {
+				row.Amount = newBudget.Amount
+				row.PaceType = newBudget.PaceType
+			} else if old := previous[categoryId]; old != nil {
+				row.PaceType = old.PaceType
+			}
+
+			if _, err = sess.Insert(row); err != nil {
 				return err
 			}
 		}
 
 		return nil
 	})
+}
+
+// isSameBudget returns whether an existing budget row (nil or zero amount means no budget) matches a new budget (nil means no budget)
+func isSameBudget(existing *models.TransactionCategoryBudget, newBudget *models.TransactionCategoryBudget) bool {
+	existingHasBudget := existing != nil && existing.Amount > 0
+
+	if !existingHasBudget || newBudget == nil {
+		return !existingHasBudget && newBudget == nil
+	}
+
+	return existing.Amount == newBudget.Amount && existing.PaceType == newBudget.PaceType
 }
 
 // DeleteAllBudgets deletes all budgets of a user
