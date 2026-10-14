@@ -47,7 +47,7 @@ services:
         condition: on-failure
 
   ezbookkeeping:
-    image: ghcr.io/as206em/ezbookkeeping:sha-94145b344ae75901dcdbc643c42acf3853672767
+    image: ghcr.io/as206em/ezbookkeeping:sha-18fbbae1df12fb8485f6b9453bf7a3c9a0089d28
     environment:
       EBK_EXCHANGE_RATES_DATA_SOURCE: central_bank_of_uzbekistan
     entrypoint:
