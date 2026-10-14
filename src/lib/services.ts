@@ -42,6 +42,10 @@ import type {
     AccountDeleteRequest
 } from '@/models/account.ts';
 import type {
+    CategoryBudgetInfoResponse,
+    CategoryBudgetSaveRequest
+} from '@/models/transaction_category_budget.ts';
+import type {
     BankMessageAutomationSettingRequest,
     BankMessageAutomationSettingResponse,
     BankMessageOutboxItem,
@@ -444,6 +448,12 @@ export default {
     },
     getUserApplicationCloudSettings: (): ApiResponsePromise<ApplicationCloudSetting[] | false> => {
         return axios.get<ApiResponse<ApplicationCloudSetting[] | false>>('v1/users/settings/cloud/get.json');
+    },
+    getAllCategoryBudgets: (): ApiResponsePromise<CategoryBudgetInfoResponse[]> => {
+        return axios.get<ApiResponse<CategoryBudgetInfoResponse[]>>('v1/transaction/categories/budgets/list.json');
+    },
+    saveCategoryBudgets: (req: CategoryBudgetSaveRequest): ApiResponsePromise<CategoryBudgetInfoResponse[]> => {
+        return axios.post<ApiResponse<CategoryBudgetInfoResponse[]>>('v1/transaction/categories/budgets/save.json', req);
     },
     getBankMessageSettings: (): ApiResponsePromise<BankMessageAutomationSettingResponse> => {
         return axios.get<ApiResponse<BankMessageAutomationSettingResponse>>('v1/bank-messages/settings.json');

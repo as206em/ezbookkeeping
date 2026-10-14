@@ -65,6 +65,7 @@ import { useSettingsStore } from '@/stores/setting.ts';
 import { useAccountsStore } from '@/stores/account.ts';
 import { useTransactionCategoriesStore } from '@/stores/transactionCategory.ts';
 import { useOverviewStore } from '@/stores/overview.ts';
+import { useTransactionCategoryBudgetsStore } from '@/stores/transactionCategoryBudget.ts';
 
 import { itemAndIndex } from '@/core/base.ts';
 import {
@@ -122,6 +123,7 @@ const settingsStore = useSettingsStore();
 const accountsStore = useAccountsStore();
 const transactionCategoriesStore = useTransactionCategoriesStore();
 const overviewStore = useOverviewStore();
+const transactionCategoryBudgetsStore = useTransactionCategoryBudgetsStore();
 
 const confirmDialog = useTemplateRef<ConfirmDialogType>('confirmDialog');
 const snackbar = useTemplateRef<SnackBarType>('snackbar');
@@ -195,6 +197,10 @@ function reload(force: boolean): void {
             force: force,
             months: getOverviewCalendarHeatmapMonths(draftLayout.value)
         }));
+    }
+
+    if (requirements.includes(OverviewWidgetDataRequirement.CategoryBudgets)) {
+        promises.push(transactionCategoryBudgetsStore.loadAllBudgets({ force: force }));
     }
 
     Promise.all(promises).then(() => {

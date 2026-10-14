@@ -31,6 +31,12 @@
                 </router-link>
             </li>
             <li class="nav-link">
+                <router-link to="/user/settings/budgets">
+                    <v-icon class="nav-item-icon" :icon="mdiPiggyBankOutline"/>
+                    <span class="nav-item-title">Budgets</span>
+                </router-link>
+            </li>
+            <li class="nav-link">
                 <router-link to="/tag/list">
                     <v-icon class="nav-item-icon" :icon="mdiTagOutline"/>
                     <span class="nav-item-title">{{ tt('Transaction Tags') }}</span>
@@ -92,7 +98,8 @@ import {
     mdiLockOpenOutline,
     mdiOnepassword,
     mdiDatabaseCogOutline,
-    mdiMessageTextOutline
+    mdiMessageTextOutline,
+    mdiPiggyBankOutline
 } from '@mdi/js';
 
 const route = useRoute();

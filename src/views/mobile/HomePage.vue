@@ -80,6 +80,7 @@ import { useAccountsStore } from '@/stores/account.ts';
 import { useTransactionCategoriesStore } from '@/stores/transactionCategory.ts';
 import { useTransactionTemplatesStore } from '@/stores/transactionTemplate.ts';
 import { useOverviewStore } from '@/stores/overview.ts';
+import { useTransactionCategoryBudgetsStore } from '@/stores/transactionCategoryBudget.ts';
 
 import { type MobileOverviewLayout, OverviewWidgetDataRequirement } from '@/core/overview_layout.ts';
 import { TemplateType } from '@/core/template.ts';
@@ -119,6 +120,7 @@ const accountsStore = useAccountsStore();
 const transactionCategoriesStore = useTransactionCategoriesStore();
 const transactionTemplatesStore = useTransactionTemplatesStore();
 const overviewStore = useOverviewStore();
+const transactionCategoryBudgetsStore = useTransactionCategoryBudgetsStore();
 
 const aiImageRecognitionSheet = useTemplateRef<AIImageRecognitionSheetType>('aiImageRecognitionSheet');
 
@@ -238,6 +240,10 @@ function reloadOverviewData(force: boolean): Promise<unknown>[] {
             force: force,
             months: getOverviewCalendarHeatmapMonths(layout.value)
         }));
+    }
+
+    if (requirements.includes(OverviewWidgetDataRequirement.CategoryBudgets)) {
+        promises.push(transactionCategoryBudgetsStore.loadAllBudgets({ force: force }));
     }
 
     return promises;

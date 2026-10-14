@@ -27,6 +27,7 @@ type DataManagementsApi struct {
 	accounts                *services.AccountService
 	transactions            *services.TransactionService
 	categories              *services.TransactionCategoryService
+	categoryBudgets         *services.TransactionCategoryBudgetService
 	tags                    *services.TransactionTagService
 	tagGroups               *services.TransactionTagGroupService
 	pictures                *services.TransactionPictureService
@@ -47,6 +48,7 @@ var (
 		accounts:                services.Accounts,
 		transactions:            services.Transactions,
 		categories:              services.TransactionCategories,
+		categoryBudgets:         services.TransactionCategoryBudgets,
 		tags:                    services.TransactionTags,
 		tagGroups:               services.TransactionTagGroups,
 		pictures:                services.TransactionPictures,
@@ -195,6 +197,13 @@ func (a *DataManagementsApi) ClearAllDataHandler(c *core.WebContext) (any, *errs
 
 	if err != nil {
 		log.Errorf(c, "[data_managements.ClearAllDataHandler] failed to delete all transaction categories, because %s", err.Error())
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	err = a.categoryBudgets.DeleteAllBudgets(c, uid)
+
+	if err != nil {
+		log.Errorf(c, "[data_managements.ClearAllDataHandler] failed to delete all transaction category budgets, because %s", err.Error())
 		return nil, errs.Or(err, errs.ErrOperationFailed)
 	}
 

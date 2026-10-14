@@ -64,6 +64,16 @@
                                     </v-btn>
                                 </router-link>
 
+                                <router-link to="/statistics/budget">
+                                    <v-btn class="top-navigation-button ms-1" density="comfortable" variant="text" :icon="true"
+                                           aria-label="Budgets"
+                                           :active="isTopNavigationActive('/statistics/budget')"
+                                           :color="isTopNavigationActive('/statistics/budget') ? 'primary' : 'default'">
+                                        <v-icon :icon="isTopNavigationActive('/statistics/budget') ? mdiPiggyBank : mdiPiggyBankOutline" size="24" />
+                                        <v-tooltip activator="parent">Budgets</v-tooltip>
+                                    </v-btn>
+                                </router-link>
+
                                 <router-link to="/insights/explorer">
                                     <v-btn class="top-navigation-button ms-1" density="comfortable" variant="text" :icon="true"
                                            :aria-label="tt('Insights Explorer')"
@@ -212,6 +222,8 @@ import {
     mdiChartPieOutline,
     mdiCompass,
     mdiCompassOutline,
+    mdiPiggyBank,
+    mdiPiggyBankOutline,
     mdiPlus,
     mdiCellphone,
     mdiThemeLightDark,

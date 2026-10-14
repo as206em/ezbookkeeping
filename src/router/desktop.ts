@@ -16,6 +16,7 @@ import HomePage from '@/views/desktop/HomePage.vue';
 import TransactionListPage from '@/views/desktop/transactions/ListPage.vue';
 
 import StatisticsTransactionPage from '@/views/desktop/statistics/TransactionPage.vue';
+import StatisticsBudgetPage from '@/views/desktop/statistics/BudgetPage.vue';
 
 import InsightsExplorerPage from '@/views/desktop/insights/ExplorerPage.vue';
 
@@ -37,6 +38,7 @@ import UserSecuritySettingPage from '@/views/desktop/user/UserSecuritySettingPag
 import UserTwoFactorAuthSettingPage from '@/views/desktop/user/UserTwoFactorAuthSettingPage.vue';
 import UserDataManagementSettingPage from '@/views/desktop/user/UserDataManagementSettingPage.vue';
 import UserBankMessageSettingPage from '@/views/desktop/user/UserBankMessageSettingPage.vue';
+import UserBudgetSettingPage from '@/views/desktop/user/UserBudgetSettingPage.vue';
 
 import AppSettingsPageLayout from '@/views/desktop/app/AppSettingsPageLayout.vue';
 import AppBasicSettingPage from '@/views/desktop/app/AppBasicSettingPage.vue';
@@ -149,6 +151,11 @@ const router = createRouter({
             })
         },
         {
+            path: '/statistics/budget',
+            component: StatisticsBudgetPage,
+            beforeEnter: checkLogin
+        },
+        {
             path: '/insights/explorer',
             component: InsightsExplorerPage,
             beforeEnter: checkLogin,
@@ -219,6 +226,11 @@ const router = createRouter({
                 {
                     path: '/user/settings/data_management',
                     component: UserDataManagementSettingPage,
+                    beforeEnter: checkLogin
+                },
+                {
+                    path: '/user/settings/budgets',
+                    component: UserBudgetSettingPage,
                     beforeEnter: checkLogin
                 },
                 {

@@ -18,6 +18,7 @@ import { useSettingsStore } from '@/stores/setting.ts';
 import { useAccountsStore } from '@/stores/account.ts';
 import { useTransactionCategoriesStore } from '@/stores/transactionCategory.ts';
 import { useOverviewStore } from '@/stores/overview.ts';
+import { useTransactionCategoryBudgetsStore } from '@/stores/transactionCategoryBudget.ts';
 
 import { type DesktopOverviewLayout, OverviewWidgetDataRequirement } from '@/core/overview_layout.ts';
 import { DESKTOP_OVERVIEW_WIDGET_DEFINITIONS, DEFAULT_DESKTOP_OVERVIEW_LAYOUT } from '@/consts/overview_layout.ts';
@@ -41,6 +42,7 @@ const settingsStore = useSettingsStore();
 const accountsStore = useAccountsStore();
 const transactionCategoriesStore = useTransactionCategoriesStore();
 const overviewStore = useOverviewStore();
+const transactionCategoryBudgetsStore = useTransactionCategoryBudgetsStore();
 
 const snackbar = useTemplateRef<SnackBarType>('snackbar');
 
@@ -107,6 +109,10 @@ function reload(force: boolean): void {
             force: force,
             months: getOverviewCalendarHeatmapMonths(layout.value)
         }));
+    }
+
+    if (requirements.includes(OverviewWidgetDataRequirement.CategoryBudgets)) {
+        promises.push(transactionCategoryBudgetsStore.loadAllBudgets({ force: force }));
     }
 
     Promise.all(promises).then(() => {

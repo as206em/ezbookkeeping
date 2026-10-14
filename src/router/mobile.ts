@@ -18,6 +18,7 @@ import AccountMoveAllTransactionsPage from '@/views/mobile/accounts/MoveAllTrans
 
 import StatisticsTransactionPage from '@/views/mobile/statistics/TransactionPage.vue';
 import StatisticsSettingsPage from '@/views/mobile/statistics/SettingsPage.vue';
+import StatisticsBudgetPage from '@/views/mobile/statistics/BudgetPage.vue';
 
 import TextSizeSettingsPage from '@/views/mobile/settings/TextSizeSettingsPage.vue';
 import PageSettingsPage from '@/views/mobile/settings/PageSettingsPage.vue';
@@ -30,6 +31,7 @@ import AccountFilterSettingsPage from '@/views/mobile/settings/AccountFilterSett
 import CategoryFilterSettingsPage from '@/views/mobile/settings/CategoryFilterSettingsPage.vue';
 import TransactionTagFilterSettingsPage from '@/views/mobile/settings/TransactionTagFilterSettingsPage.vue';
 import BankMessageSettingsPage from '@/views/mobile/settings/BankMessageSettingsPage.vue';
+import BudgetSettingsPage from '@/views/mobile/settings/BudgetSettingsPage.vue';
 
 import SettingsPage from '@/views/mobile/SettingsPage.vue';
 import ApplicationLockPage from '@/views/mobile/ApplicationLockPage.vue';
@@ -215,6 +217,11 @@ const routes: Router.RouteParameters[] = [
         beforeEnter: [checkLogin]
     },
     {
+        path: '/statistic/budget',
+        async: asyncResolve(StatisticsBudgetPage),
+        beforeEnter: [checkLogin]
+    },
+    {
         path: '/statistic/settings',
         async: asyncResolve(StatisticsSettingsPage),
         beforeEnter: [checkLogin]
@@ -262,6 +269,11 @@ const routes: Router.RouteParameters[] = [
     {
         path: '/settings/sync',
         async: asyncResolve(ApplicationCloudSyncSettingsPage),
+        beforeEnter: [checkLogin]
+    },
+    {
+        path: '/settings/budgets',
+        async: asyncResolve(BudgetSettingsPage),
         beforeEnter: [checkLogin]
     },
     {

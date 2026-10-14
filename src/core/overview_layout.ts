@@ -11,7 +11,8 @@ export enum OverviewWidgetType {
     NetAssetsTrend = 'net-assets-trend',
     ExpenseCategoryRanking = 'expense-category-ranking',
     RecentTransactions = 'recent-transactions',
-    TransactionCalendarHeatmap = 'transaction-calendar-heatmap'
+    TransactionCalendarHeatmap = 'transaction-calendar-heatmap',
+    CategoryBudgets = 'category-budgets'
 }
 
 export enum OverviewWidgetDataRequirement {
@@ -23,7 +24,8 @@ export enum OverviewWidgetDataRequirement {
     TransactionCategoryStatistics = 'transactionCategoryStatistics',
     AssetTrends = 'assetTrends',
     RecentTransactions = 'recentTransactions',
-    DailyTransactionAmounts = 'dailyTransactionAmounts'
+    DailyTransactionAmounts = 'dailyTransactionAmounts',
+    CategoryBudgets = 'categoryBudgets'
 }
 
 export type OverviewWidgetSettingValue = string | number | boolean | (string | number)[];
