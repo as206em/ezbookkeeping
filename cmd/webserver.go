@@ -472,6 +472,7 @@ func startWebServer(c *core.CliContext) error {
 			apiV1Route.GET("/assets/holdings/list.json", bindApi(api.Assets.HoldingListHandler, config))
 			apiV1Route.POST("/assets/prices/set.json", bindApi(api.Assets.PriceSetHandler, config))
 			apiV1Route.POST("/assets/prices/refresh.json", bindApi(api.Assets.PriceRefreshHandler, config))
+			apiV1Route.GET("/assets/snapshots/list.json", bindApi(api.Assets.SnapshotListHandler, config))
 			apiV1Route.GET("/assets/binance/status.json", bindApi(api.Assets.BinanceStatusHandler, config))
 			apiV1Route.POST("/assets/binance/connect.json", bindApi(api.Assets.BinanceConnectHandler, config))
 			apiV1Route.POST("/assets/binance/sync.json", bindApi(api.Assets.BinanceSyncHandler, config))

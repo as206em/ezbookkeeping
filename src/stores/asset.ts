@@ -8,6 +8,7 @@ import type {
     AssetHoldingInfoResponse,
     AssetPriceRefreshResponse,
     AssetPriceSetRequest,
+    AssetSnapshotInfoResponse,
     AssetTradeImportResponse,
     AssetTradeInfoResponse,
     AssetTradeInput,
@@ -32,11 +33,13 @@ function rejectWith(error: { processed?: boolean; response?: { data?: { errorMes
 export const useAssetsStore = defineStore('assets', () => {
     const allHoldings = ref<AssetHoldingInfoResponse[]>([]);
     const allTrades = ref<AssetTradeInfoResponse[]>([]);
+    const allSnapshots = ref<AssetSnapshotInfoResponse[]>([]);
     const binanceStatus = ref<AssetBinanceStatusResponse>({ connected: false, lastSyncTime: 0, lastSyncCreatedCount: 0 });
 
     function resetAssets(): void {
         allHoldings.value = [];
         allTrades.value = [];
+        allSnapshots.value = [];
         binanceStatus.value = { connected: false, lastSyncTime: 0, lastSyncCreatedCount: 0 };
     }
 
@@ -107,18 +110,22 @@ export const useAssetsStore = defineStore('assets', () => {
         return new Promise((resolve, reject) => {
             Promise.all([
                 services.getAllAssetHoldings(),
-                services.getAllAssetTrades()
-            ]).then(([holdingsResponse, tradesResponse]) => {
+                services.getAllAssetTrades(),
+                services.getAllAssetSnapshots()
+            ]).then(([holdingsResponse, tradesResponse, snapshotsResponse]) => {
                 const holdings = holdingsResponse.data;
                 const trades = tradesResponse.data;
+                const snapshots = snapshotsResponse.data;
 
-                if (!holdings || !holdings.success || !holdings.result || !trades || !trades.success || !trades.result) {
+                if (!holdings || !holdings.success || !holdings.result || !trades || !trades.success || !trades.result
+                    || !snapshots || !snapshots.success || !snapshots.result) {
                     reject({ message: 'Unable to retrieve assets' });
                     return;
                 }
 
                 allHoldings.value = holdings.result;
                 allTrades.value = trades.result;
+                allSnapshots.value = snapshots.result;
                 resolve();
             }).catch(error => rejectWith(error, 'Unable to retrieve assets', reject));
         });
@@ -218,6 +225,7 @@ export const useAssetsStore = defineStore('assets', () => {
         // states
         allHoldings,
         allTrades,
+        allSnapshots,
         binanceStatus,
         // functions
         resetAssets,

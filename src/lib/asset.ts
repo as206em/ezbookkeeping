@@ -1,4 +1,4 @@
-import { AssetMarket, AssetTradeSide, type AssetHoldingInfoResponse, type AssetTradeInput } from '@/models/asset.ts';
+import { AssetMarket, AssetTradeSide, type AssetHoldingInfoResponse, type AssetSnapshotInfoResponse, type AssetTradeInput } from '@/models/asset.ts';
 
 export const ASSET_MARKET_NAMES: Record<AssetMarket, string> = {
     [AssetMarket.DFM]: 'DFM',
@@ -414,4 +414,114 @@ export function summarizeAssetHoldings(holdings: AssetHoldingInfoResponse[], con
     }
 
     return { value, unrealizedProfit, realizedProfit, pricedHoldingCount, unpricedHoldingCount, incomplete };
+}
+
+export interface AssetHistoryPoint {
+    readonly date: string; // yyyy-mm-dd
+    readonly value: number;
+    readonly costBasis: number;
+}
+
+export interface AssetHistory {
+    readonly points: AssetHistoryPoint[];
+    /** true when some amounts could not be converted to the target currency, so those days are understated */
+    readonly incomplete: boolean;
+}
+
+export const ASSET_HISTORY_RANGES: { label: string; days: number | null }[] = [
+    { label: '1M', days: 30 },
+    { label: '6M', days: 182 },
+    { label: '1Y', days: 365 },
+    { label: 'All', days: null }
+];
+
+/** Adds the snapshots of each day (one per market and currency) in the currency the converter returns, oldest day first. */
+export function buildAssetHistory(snapshots: AssetSnapshotInfoResponse[], convert: AssetAmountConverter): AssetHistory {
+    const days = new Map<string, { value: number; costBasis: number }>();
+    let incomplete = false;
+
+    for (const snapshot of snapshots) {
+        const value = convert(snapshot.value, snapshot.currency);
+        const costBasis = convert(snapshot.costBasis, snapshot.currency);
+
+        if (value === null || costBasis === null) {
+            incomplete = true;
+        }
+
+        const day = days.get(snapshot.date) ?? { value: 0, costBasis: 0 };
+        day.value += value ?? 0;
+        day.costBasis += costBasis ?? 0;
+        days.set(snapshot.date, day);
+    }
+
+    const points = [...days.entries()]
+        .sort((a, b) => a[0].localeCompare(b[0]))
+        .map(([date, day]) => ({ date, value: day.value, costBasis: day.costBasis }));
+
+    return { points, incomplete };
+}
+
+/** Keeps the points of the last `days` days up to today (yyyy-mm-dd); null keeps everything. */
+export function filterAssetHistoryByRange(points: AssetHistoryPoint[], days: number | null, today: string): AssetHistoryPoint[] {
+    if (days === null) {
+        return points;
+    }
+
+    const start = new Date(`${today}T00:00:00Z`);
+    start.setUTCDate(start.getUTCDate() - days);
+    const startText = start.toISOString().slice(0, 10);
+
+    return points.filter(point => point.date >= startText);
+}
+
+export type AssetAllocationKey = 'cash' | 'stocks' | 'crypto' | 'other';
+
+export interface AssetAllocationItem {
+    readonly key: AssetAllocationKey;
+    readonly label: string;
+    readonly value: number;
+    /** share of the total, 0 to 1 */
+    readonly share: number;
+}
+
+const ALLOCATION_LABELS: Record<AssetAllocationKey, string> = {
+    cash: 'Cash',
+    stocks: 'Stocks',
+    crypto: 'Crypto',
+    other: 'Other'
+};
+
+/** Splits cash and priced holdings into cash, stocks (DFM and ADX), crypto and other (manual assets). Empty groups are left out. */
+export function getAssetAllocation(holdings: AssetHoldingInfoResponse[], cash: number, convert: AssetAmountConverter): AssetAllocationItem[] {
+    const totals: Record<AssetAllocationKey, number> = { cash: Math.max(cash, 0), stocks: 0, crypto: 0, other: 0 };
+
+    for (const holding of holdings) {
+        if (isHoldingSold(holding) || !holding.hasPrice) {
+            continue;
+        }
+
+        const value = convert(holding.value, holding.priceCurrency || holding.currency);
+
+        if (value === null || value <= 0) {
+            continue;
+        }
+
+        if (holding.market === AssetMarket.DFM || holding.market === AssetMarket.ADX) {
+            totals.stocks += value;
+        } else if (holding.market === AssetMarket.Crypto) {
+            totals.crypto += value;
+        } else {
+            totals.other += value;
+        }
+    }
+
+    const total = totals.cash + totals.stocks + totals.crypto + totals.other;
+
+    if (total <= 0) {
+        return [];
+    }
+
+    return (Object.keys(totals) as AssetAllocationKey[])
+        .filter(key => totals[key] > 0)
+        .map(key => ({ key, label: ALLOCATION_LABELS[key], value: totals[key], share: totals[key] / total }));
 }

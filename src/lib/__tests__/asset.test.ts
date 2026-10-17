@@ -1,10 +1,13 @@
 import { describe, expect, test } from 'vitest';
 
-import { AssetMarket, AssetTradeSide, type AssetHoldingInfoResponse } from '@/models/asset.ts';
+import { AssetMarket, AssetTradeSide, type AssetHoldingInfoResponse, type AssetSnapshotInfoResponse } from '@/models/asset.ts';
 
 import {
     ASSET_TRADE_CSV_TEMPLATE,
+    buildAssetHistory,
+    filterAssetHistoryByRange,
     filterHoldings,
+    getAssetAllocation,
     getHoldingProfitRatio,
     getHoldingTotalProfit,
     summarizeAssetHoldings,
@@ -227,5 +230,83 @@ describe('summarizeAssetHoldings', () => {
 
         expect(summary.incomplete).toBe(true);
         expect(summary.value).toBe(0);
+    });
+});
+
+function snap(date: string, market: AssetMarket, currency: string, value: number, costBasis: number): AssetSnapshotInfoResponse {
+    return { date, market, currency, value, costBasis };
+}
+
+describe('buildAssetHistory', () => {
+    const toAed = (amount: number, currency: string) => currency === 'USD' ? amount * 3.6725 : currency === 'AED' ? amount : null;
+
+    test('adds the markets of each day in the target currency, oldest day first', () => {
+        const history = buildAssetHistory([
+            snap('2026-10-17', AssetMarket.DFM, 'AED', 1100, 1000),
+            snap('2026-10-16', AssetMarket.DFM, 'AED', 1000, 1000),
+            snap('2026-10-17', AssetMarket.Crypto, 'USD', 100, 80)
+        ], toAed);
+
+        expect(history.incomplete).toBe(false);
+        expect(history.points.map(p => p.date)).toEqual(['2026-10-16', '2026-10-17']);
+        expect(history.points[0]).toEqual({ date: '2026-10-16', value: 1000, costBasis: 1000 });
+        expect(history.points[1]!.value).toBeCloseTo(1100 + 367.25);
+        expect(history.points[1]!.costBasis).toBeCloseTo(1000 + 293.8);
+    });
+
+    test('flags days with an unconvertible currency instead of hiding them', () => {
+        const history = buildAssetHistory([snap('2026-10-17', AssetMarket.DFM, 'AED', 500, 400), snap('2026-10-17', AssetMarket.Manual, 'XYZ', 99, 99)], toAed);
+
+        expect(history.incomplete).toBe(true);
+        expect(history.points).toEqual([{ date: '2026-10-17', value: 500, costBasis: 400 }]);
+    });
+
+    test('is empty without snapshots', () => {
+        expect(buildAssetHistory([], toAed)).toEqual({ points: [], incomplete: false });
+    });
+});
+
+describe('filterAssetHistoryByRange', () => {
+    const points = ['2026-01-01', '2026-09-01', '2026-10-01', '2026-10-17'].map(date => ({ date, value: 1, costBasis: 1 }));
+
+    test('keeps the last N days up to today', () => {
+        expect(filterAssetHistoryByRange(points, 30, '2026-10-17').map(p => p.date)).toEqual(['2026-10-01', '2026-10-17']);
+        expect(filterAssetHistoryByRange(points, 182, '2026-10-17').map(p => p.date)).toEqual(['2026-09-01', '2026-10-01', '2026-10-17']);
+    });
+
+    test('keeps everything for All', () => {
+        expect(filterAssetHistoryByRange(points, null, '2026-10-17')).toHaveLength(4);
+    });
+});
+
+describe('getAssetAllocation', () => {
+    const toAed = (amount: number, currency: string) => currency === 'USD' ? amount * 4 : currency === 'AED' ? amount : null;
+
+    test('splits cash, stocks, crypto and manual assets into shares of the total', () => {
+        const items = getAssetAllocation([
+            holding({ market: AssetMarket.DFM, value: 100 }),
+            holding({ market: AssetMarket.ADX, value: 100 }),
+            holding({ market: AssetMarket.Crypto, currency: 'USD', priceCurrency: 'USD', value: 50 }),
+            holding({ market: AssetMarket.Manual, value: 100 })
+        ], 400, toAed);
+
+        expect(items.map(i => [i.key, i.value])).toEqual([['cash', 400], ['stocks', 200], ['crypto', 200], ['other', 100]]);
+        expect(items.map(i => i.share)).toEqual([400 / 900, 200 / 900, 200 / 900, 100 / 900]);
+        expect(items.reduce((sum, i) => sum + i.share, 0)).toBeCloseTo(1);
+    });
+
+    test('leaves out empty groups, sold and unpriced holdings and negative cash', () => {
+        const items = getAssetAllocation([
+            holding({ market: AssetMarket.DFM, value: 100 }),
+            holding({ market: AssetMarket.Crypto, quantity: 0, value: 0 }),
+            holding({ market: AssetMarket.Manual, hasPrice: false, value: 0 })
+        ], -50, toAed);
+
+        expect(items.map(i => i.key)).toEqual(['stocks']);
+        expect(items[0]!.share).toBe(1);
+    });
+
+    test('is empty when there is nothing', () => {
+        expect(getAssetAllocation([], 0, toAed)).toEqual([]);
     });
 });

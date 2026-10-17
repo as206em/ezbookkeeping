@@ -98,3 +98,11 @@ export interface AssetBinanceSyncResponse {
     readonly pairsChecked: number;
     readonly error?: string;
 }
+
+export interface AssetSnapshotInfoResponse {
+    readonly date: string; // yyyy-mm-dd
+    readonly market: AssetMarket;
+    readonly currency: string;
+    readonly value: number;
+    readonly costBasis: number;
+}

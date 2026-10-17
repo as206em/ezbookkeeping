@@ -1,6 +1,7 @@
 package models
 
 import (
+	"fmt"
 	"math"
 	"regexp"
 	"strings"
@@ -268,4 +269,86 @@ func (c *AssetBinanceConnection) ToAssetBinanceStatusResponse() *AssetBinanceSta
 		LastSyncCreatedCount: c.LastSyncCreatedCount,
 		LastSyncError:        c.LastSyncError,
 	}
+}
+
+// AssetSnapshotAmountScale is the fixed-point scale (cents) of snapshot amounts
+const AssetSnapshotAmountScale float64 = 100
+
+// AssetSnapshotMaxRows is the most snapshot rows returned by one history request
+const AssetSnapshotMaxRows = 20000
+
+// AssetSnapshot represents what a user's holdings of one market in one currency were worth at the end of a day,
+// and what was paid for them. Snapshot amounts are in cents.
+type AssetSnapshot struct {
+	Uid             int64       `xorm:"PK"`
+	SnapshotDate    int32       `xorm:"PK"` // yyyymmdd, UTC
+	Market          AssetMarket `xorm:"PK VARCHAR(16)"`
+	Currency        string      `xorm:"PK VARCHAR(3)"`
+	Value           int64       `xorm:"NOT NULL"`
+	CostBasis       int64       `xorm:"NOT NULL"`
+	UpdatedUnixTime int64
+}
+
+// AssetSnapshotInfoResponse represents a view-object of an asset snapshot
+type AssetSnapshotInfoResponse struct {
+	Date      string      `json:"date"` // yyyy-mm-dd
+	Market    AssetMarket `json:"market"`
+	Currency  string      `json:"currency"`
+	Value     float64     `json:"value"`
+	CostBasis float64     `json:"costBasis"`
+}
+
+// ToAssetSnapshotInfoResponse returns a view-object according to database model
+func (s *AssetSnapshot) ToAssetSnapshotInfoResponse() *AssetSnapshotInfoResponse {
+	return &AssetSnapshotInfoResponse{
+		Date:      fmt.Sprintf("%04d-%02d-%02d", s.SnapshotDate/10000, s.SnapshotDate/100%100, s.SnapshotDate%100),
+		Market:    s.Market,
+		Currency:  s.Currency,
+		Value:     float64(s.Value) / AssetSnapshotAmountScale,
+		CostBasis: float64(s.CostBasis) / AssetSnapshotAmountScale,
+	}
+}
+
+// BuildAssetSnapshots groups the priced holdings by market and currency for a day.
+// Sold holdings and holdings without a price are left out, so value and cost basis always cover the same assets.
+func BuildAssetSnapshots(uid int64, snapshotDate int32, holdings []*AssetHoldingInfoResponse, updatedUnixTime int64) []*AssetSnapshot {
+	type groupKey struct {
+		market   AssetMarket
+		currency string
+	}
+
+	groups := make(map[groupKey]*AssetSnapshot)
+	var order []groupKey
+
+	for _, holding := range holdings {
+		if holding.Quantity <= 0 || !holding.HasPrice {
+			continue
+		}
+
+		currency := holding.PriceCurrency
+
+		if currency == "" {
+			currency = holding.Currency
+		}
+
+		key := groupKey{market: holding.Market, currency: currency}
+		snapshot := groups[key]
+
+		if snapshot == nil {
+			snapshot = &AssetSnapshot{Uid: uid, SnapshotDate: snapshotDate, Market: holding.Market, Currency: currency, UpdatedUnixTime: updatedUnixTime}
+			groups[key] = snapshot
+			order = append(order, key)
+		}
+
+		snapshot.Value += int64(math.Round(holding.Value * AssetSnapshotAmountScale))
+		snapshot.CostBasis += int64(math.Round(holding.CostBasis * AssetSnapshotAmountScale))
+	}
+
+	result := make([]*AssetSnapshot, 0, len(order))
+
+	for _, key := range order {
+		result = append(result, groups[key])
+	}
+
+	return result
 }

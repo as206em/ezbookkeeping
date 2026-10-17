@@ -36,11 +36,44 @@
                             <div class="text-h5" :class="profitClass(summary.realizedProfit)">{{ formatSummaryAmount(summary.realizedProfit, true) }}</div>
                         </v-col>
                     </v-row>
+                    <template v-if="allocation.length">
+                        <div class="d-flex mt-4 asset-allocation-bar" role="img" aria-label="Allocation of your wealth">
+                            <div :key="item.key" :style="{ flexGrow: item.share, background: ALLOCATION_COLORS[item.key] }" v-for="item in allocation"/>
+                        </div>
+                        <div class="d-flex flex-wrap gap-4 mt-2 text-body-medium text-medium-emphasis">
+                            <span :key="item.key" v-for="item in allocation">
+                                <span class="asset-allocation-dot" :style="{ background: ALLOCATION_COLORS[item.key] }"/>{{ item.label }} {{ Math.round(item.share * 100) }}%
+                            </span>
+                        </div>
+                    </template>
                     <div class="text-body-medium text-medium-emphasis mt-3" v-if="summary.incomplete">
                         Some amounts could not be converted to {{ defaultCurrency }} because an exchange rate is missing, so totals are partial.
                     </div>
                     <div class="text-body-medium text-medium-emphasis mt-3" v-if="lastPriceTime">
                         Prices as of {{ formatDateTime(lastPriceTime) }}. DFM and crypto refresh automatically twice a day; ADX prices are set by hand.
+                    </div>
+                </v-card-text>
+            </v-card>
+        </v-col>
+
+        <v-col cols="12">
+            <v-card :class="{ disabled: loading }">
+                <template #title>
+                    <div class="d-flex align-center flex-wrap gap-2">
+                        <span>Assets over time</span>
+                        <v-spacer/>
+                        <v-btn-toggle mandatory density="compact" color="primary" variant="outlined" divided v-model="historyRangeDays">
+                            <v-btn :value="range.days" :key="range.label" v-for="range in ASSET_HISTORY_RANGES">{{ range.label }}</v-btn>
+                        </v-btn-toggle>
+                    </div>
+                </template>
+                <v-card-text>
+                    <asset-history-chart :points="historyPoints" :format-amount="formatSummaryAmount" v-if="historyPoints.length >= 2"/>
+                    <div class="text-medium-emphasis py-6 text-center" v-else>
+                        The chart fills in as days go by. A point is saved every day and whenever your prices or trades change, so it shows the value of your assets, not your cash accounts.
+                    </div>
+                    <div class="text-body-medium text-medium-emphasis" v-if="historyIncomplete">
+                        Some days are understated because an exchange rate to {{ defaultCurrency }} is missing.
                     </div>
                 </v-card-text>
             </v-card>
@@ -214,6 +247,7 @@ import SnackBar from '@/components/desktop/SnackBar.vue';
 import AssetTradeDialog from './AssetTradeDialog.vue';
 import AssetImportDialog from './AssetImportDialog.vue';
 import AssetBinanceDialog from './AssetBinanceDialog.vue';
+import AssetHistoryChart from '@/components/desktop/AssetHistoryChart.vue';
 
 import { ref, reactive, computed, onMounted, useTemplateRef } from 'vue';
 
@@ -225,8 +259,12 @@ import { useUserStore } from '@/stores/user.ts';
 import { AssetMarket, AssetTradeSide, type AssetHoldingInfoResponse, type AssetTradeInfoResponse } from '@/models/asset.ts';
 
 import {
+    ASSET_HISTORY_RANGES,
     ASSET_MARKET_NAMES,
+    buildAssetHistory,
+    filterAssetHistoryByRange,
     filterHoldings,
+    getAssetAllocation,
     getHoldingProfitRatio,
     getHoldingTotalProfit,
     isHoldingSold,
@@ -241,6 +279,8 @@ type ConfirmDialogType = InstanceType<typeof ConfirmDialog>;
 type TradeDialogType = InstanceType<typeof AssetTradeDialog>;
 type ImportDialogType = InstanceType<typeof AssetImportDialog>;
 type BinanceDialogType = InstanceType<typeof AssetBinanceDialog>;
+
+const ALLOCATION_COLORS: Record<string, string> = { cash: '#8e8e93', stocks: '#5ac8fa', crypto: '#ff9500', other: '#af52de' };
 
 const filterMarkets = [AssetMarket.DFM, AssetMarket.ADX, AssetMarket.Crypto, AssetMarket.Manual];
 
@@ -258,6 +298,7 @@ const binanceDialog = useTemplateRef<BinanceDialogType>('binanceDialog');
 const loading = ref<boolean>(true);
 const refreshing = ref<boolean>(false);
 const syncing = ref<boolean>(false);
+const historyRangeDays = ref<number | null>(182);
 const showSold = ref<boolean>(false);
 const marketFilter = ref<AssetMarket | ''>('');
 const expanded = reactive<Record<string, boolean>>({});
@@ -289,6 +330,11 @@ const cashBalance = computed<number>(() => {
 });
 
 const netWorth = computed<number>(() => cashBalance.value + summary.value.value);
+
+const allocation = computed(() => getAssetAllocation(allHoldings.value, cashBalance.value, toDefaultCurrency));
+const history = computed(() => buildAssetHistory(assetsStore.allSnapshots, toDefaultCurrency));
+const historyIncomplete = computed<boolean>(() => history.value.incomplete);
+const historyPoints = computed(() => filterAssetHistoryByRange(history.value.points, historyRangeDays.value, new Date().toISOString().slice(0, 10)));
 
 const lastPriceTime = computed<number>(() => allHoldings.value.reduce((latest, holding) => holding.hasPrice && !isHoldingSold(holding) ? Math.max(latest, holding.priceTime) : latest, 0));
 
@@ -512,6 +558,21 @@ onMounted(load);
 </script>
 
 <style>
+.asset-allocation-bar {
+    height: 10px;
+    gap: 2px;
+    border-radius: 5px;
+    overflow: hidden;
+}
+
+.asset-allocation-dot {
+    display: inline-block;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    margin-inline-end: 6px;
+}
+
 .asset-holding-table .asset-trade-rows > td {
     background: rgba(var(--v-theme-on-surface), 0.03);
 }

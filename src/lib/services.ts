@@ -52,6 +52,7 @@ import type {
     AssetBinanceSyncResponse,
     AssetHoldingInfoResponse,
     AssetPriceRefreshResponse,
+    AssetSnapshotInfoResponse,
     AssetPriceSetRequest,
     AssetTradeImportRequest,
     AssetTradeImportResponse,
@@ -499,6 +500,9 @@ export default {
     },
     refreshAssetPrices: (): ApiResponsePromise<AssetPriceRefreshResponse> => {
         return axios.post<ApiResponse<AssetPriceRefreshResponse>>('v1/assets/prices/refresh.json');
+    },
+    getAllAssetSnapshots: (): ApiResponsePromise<AssetSnapshotInfoResponse[]> => {
+        return axios.get<ApiResponse<AssetSnapshotInfoResponse[]>>('v1/assets/snapshots/list.json');
     },
     getAssetBinanceStatus: (): ApiResponsePromise<AssetBinanceStatusResponse> => {
         return axios.get<ApiResponse<AssetBinanceStatusResponse>>('v1/assets/binance/status.json');

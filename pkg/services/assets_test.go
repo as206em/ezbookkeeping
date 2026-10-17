@@ -41,6 +41,7 @@ func initializeAssetServiceTest(t *testing.T) core.Context {
 	require.NoError(t, datastore.Container.UserDataStore.SyncStructs(new(models.AssetTrade)))
 	require.NoError(t, datastore.Container.UserDataStore.SyncStructs(new(models.AssetPrice)))
 	require.NoError(t, datastore.Container.UserDataStore.SyncStructs(new(models.AssetBinanceConnection)))
+	require.NoError(t, datastore.Container.UserDataStore.SyncStructs(new(models.AssetSnapshot)))
 
 	return core.NewNullContext()
 }

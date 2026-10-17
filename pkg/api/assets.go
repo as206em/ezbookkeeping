@@ -219,7 +219,7 @@ func (a *AssetsApi) PriceSetHandler(c *core.WebContext) (any, *errs.Error) {
 	}
 
 	uid := c.GetCurrentUid()
-	err = a.assets.SetPrice(c, &models.AssetPrice{
+	err = a.assets.SetPriceAndSnapshot(c, &models.AssetPrice{
 		Uid:       uid,
 		Market:    req.Market,
 		Symbol:    symbol,
@@ -332,4 +332,23 @@ func (a *AssetsApi) BinanceDisconnectHandler(c *core.WebContext) (any, *errs.Err
 	log.Infof(c, "[assets.BinanceDisconnectHandler] user \"uid:%d\" has disconnected binance", uid)
 
 	return true, nil
+}
+
+// SnapshotListHandler returns the daily history of what the holdings of current user were worth
+func (a *AssetsApi) SnapshotListHandler(c *core.WebContext) (any, *errs.Error) {
+	uid := c.GetCurrentUid()
+	snapshots, err := a.assets.GetSnapshotsByUid(c, uid)
+
+	if err != nil {
+		log.Errorf(c, "[assets.SnapshotListHandler] failed to get snapshots for user \"uid:%d\", because %s", uid, err.Error())
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	responses := make([]*models.AssetSnapshotInfoResponse, len(snapshots))
+
+	for i, snapshot := range snapshots {
+		responses[i] = snapshot.ToAssetSnapshotInfoResponse()
+	}
+
+	return responses, nil
 }

@@ -4,6 +4,7 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func newTestTrade(id int64, market AssetMarket, symbol string, side AssetTradeSide, quantity float64, price float64, fee float64, tradeTime int64) *AssetTrade {
@@ -179,4 +180,32 @@ func TestScaleAssetNumber_RoundTrips(t *testing.T) {
 	assert.Equal(t, int64(42000000), ScaleAssetNumber(0.42))
 	assert.Equal(t, 0.42, UnscaleAssetNumber(ScaleAssetNumber(0.42)))
 	assert.Equal(t, 401000.0, UnscaleAssetNumber(ScaleAssetNumber(401000)))
+}
+
+func TestBuildAssetSnapshots_GroupsPricedHoldingsByMarketAndCurrency(t *testing.T) {
+	holdings := []*AssetHoldingInfoResponse{
+		{Market: ASSET_MARKET_DFM, Symbol: "EMAAR", Currency: "AED", Quantity: 5000, HasPrice: true, PriceCurrency: "AED", Value: 57300, CostBasis: 47200},
+		{Market: ASSET_MARKET_DFM, Symbol: "ALDAR", Currency: "AED", Quantity: 100, HasPrice: true, PriceCurrency: "AED", Value: 730.55, CostBasis: 610.25},
+		{Market: ASSET_MARKET_CRYPTO, Symbol: "BTC", Currency: "USD", Quantity: 0.42, HasPrice: true, PriceCurrency: "USD", Value: 34291.1, CostBasis: 36663.4},
+		{Market: ASSET_MARKET_CRYPTO, Symbol: "SOLD", Currency: "USD", Quantity: 0, HasPrice: true, PriceCurrency: "USD", Value: 0, CostBasis: 0},
+		{Market: ASSET_MARKET_ADX, Symbol: "NOPRICE", Currency: "AED", Quantity: 10, HasPrice: false, CostBasis: 500},
+	}
+
+	snapshots := BuildAssetSnapshots(7, 20261017, holdings, 123)
+
+	require.Len(t, snapshots, 2)
+	assert.Equal(t, &AssetSnapshot{Uid: 7, SnapshotDate: 20261017, Market: ASSET_MARKET_DFM, Currency: "AED", Value: 5803055, CostBasis: 4781025, UpdatedUnixTime: 123}, snapshots[0])
+	assert.Equal(t, &AssetSnapshot{Uid: 7, SnapshotDate: 20261017, Market: ASSET_MARKET_CRYPTO, Currency: "USD", Value: 3429110, CostBasis: 3666340, UpdatedUnixTime: 123}, snapshots[1])
+}
+
+func TestBuildAssetSnapshots_NothingHeldHasNoRows(t *testing.T) {
+	assert.Empty(t, BuildAssetSnapshots(1, 20261017, nil, 1))
+}
+
+func TestAssetSnapshotResponse_FormatsDateAndAmounts(t *testing.T) {
+	response := (&AssetSnapshot{SnapshotDate: 20260305, Market: ASSET_MARKET_DFM, Currency: "AED", Value: 123456, CostBasis: 100000}).ToAssetSnapshotInfoResponse()
+
+	assert.Equal(t, "2026-03-05", response.Date)
+	assert.Equal(t, 1234.56, response.Value)
+	assert.Equal(t, 1000.0, response.CostBasis)
 }

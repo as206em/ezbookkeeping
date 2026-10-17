@@ -177,10 +177,16 @@ func (s *AssetService) CreateTrade(c core.Context, trade *models.AssetTrade) err
 	trade.CreatedUnixTime = now
 	trade.UpdatedUnixTime = now
 
-	return s.UserDataDB(trade.Uid).DoTransaction(c, func(sess *xorm.Session) error {
+	err := s.UserDataDB(trade.Uid).DoTransaction(c, func(sess *xorm.Session) error {
 		_, err := sess.Insert(trade)
 		return err
 	})
+
+	if err == nil {
+		s.saveSnapshotQuietly(c, trade.Uid)
+	}
+
+	return err
 }
 
 // ImportTrades saves the trades that are not in the database yet and returns how many were created and skipped.
@@ -263,6 +269,10 @@ func (s *AssetService) ImportTrades(c core.Context, uid int64, trades []*models.
 		return err
 	})
 
+	if err == nil && created > 0 {
+		s.saveSnapshotQuietly(c, uid)
+	}
+
 	return created, skipped, err
 }
 
@@ -272,7 +282,7 @@ func (s *AssetService) ModifyTrade(c core.Context, uid int64, tradeId int64, upd
 		return errs.ErrUserIdInvalid
 	}
 
-	return s.UserDataDB(uid).DoTransaction(c, func(sess *xorm.Session) error {
+	err := s.UserDataDB(uid).DoTransaction(c, func(sess *xorm.Session) error {
 		existing := &models.AssetTrade{}
 		has, err := sess.Where("uid=? AND trade_id=? AND deleted=?", uid, tradeId, false).Get(existing)
 
@@ -294,6 +304,12 @@ func (s *AssetService) ModifyTrade(c core.Context, uid int64, tradeId int64, upd
 
 		return err
 	})
+
+	if err == nil {
+		s.saveSnapshotQuietly(c, uid)
+	}
+
+	return err
 }
 
 // DeleteTrade soft-deletes a trade
@@ -304,7 +320,7 @@ func (s *AssetService) DeleteTrade(c core.Context, uid int64, tradeId int64) err
 
 	now := time.Now().Unix()
 
-	return s.UserDataDB(uid).DoTransaction(c, func(sess *xorm.Session) error {
+	err := s.UserDataDB(uid).DoTransaction(c, func(sess *xorm.Session) error {
 		deleted, err := sess.Cols("deleted", "deleted_unix_time").Where("uid=? AND trade_id=? AND deleted=?", uid, tradeId, false).Update(&models.AssetTrade{
 			Deleted:         true,
 			DeletedUnixTime: now,
@@ -320,9 +336,15 @@ func (s *AssetService) DeleteTrade(c core.Context, uid int64, tradeId int64) err
 
 		return nil
 	})
+
+	if err == nil {
+		s.saveSnapshotQuietly(c, uid)
+	}
+
+	return err
 }
 
-// DeleteAllTradesAndPrices deletes all trades, prices and the Binance connection of a user
+// DeleteAllTradesAndPrices deletes all trades, prices, snapshots and the Binance connection of a user
 func (s *AssetService) DeleteAllTradesAndPrices(c core.Context, uid int64) error {
 	if uid <= 0 {
 		return errs.ErrUserIdInvalid
@@ -342,6 +364,12 @@ func (s *AssetService) DeleteAllTradesAndPrices(c core.Context, uid int64) error
 		}
 
 		_, err = sess.Where("uid=?", uid).Delete(&models.AssetBinanceConnection{})
+
+		if err != nil {
+			return err
+		}
+
+		_, err = sess.Where("uid=?", uid).Delete(&models.AssetSnapshot{})
 
 		return err
 	})
@@ -366,6 +394,17 @@ func (s *AssetService) SetPrice(c core.Context, price *models.AssetPrice) error 
 
 		return err
 	})
+}
+
+// SetPriceAndSnapshot stores a price and refreshes today's snapshot, for a price a user entered by hand
+func (s *AssetService) SetPriceAndSnapshot(c core.Context, price *models.AssetPrice) error {
+	err := s.SetPrice(c, price)
+
+	if err == nil {
+		s.saveSnapshotQuietly(c, price.Uid)
+	}
+
+	return err
 }
 
 // RefreshPrices fetches the latest prices of all currently held assets of a user from the registered price providers.
@@ -398,6 +437,8 @@ func (s *AssetService) RefreshPrices(c core.Context, uid int64) (*models.AssetPr
 	for _, market := range markets {
 		response.Markets = append(response.Markets, s.refreshMarketPrices(c, uid, market, symbolsByMarket[market]))
 	}
+
+	s.saveSnapshotQuietly(c, uid)
 
 	return response, nil
 }
