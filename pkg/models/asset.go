@@ -218,3 +218,54 @@ func (t *AssetTrade) ToAssetTradeInfoResponse(realizedProfit *float64) *AssetTra
 		RealizedProfit: realizedProfit,
 	}
 }
+
+// AssetBinanceConnection represents the read-only Binance API key of a user. The key and secret are stored encrypted.
+type AssetBinanceConnection struct {
+	Uid                  int64  `xorm:"PK"`
+	ApiKey               string `xorm:"VARCHAR(512) NOT NULL"`
+	ApiSecret            string `xorm:"VARCHAR(512) NOT NULL"`
+	ApiKeyHint           string `xorm:"VARCHAR(8) NOT NULL"`
+	LastSyncUnixTime     int64
+	LastSyncCreatedCount int
+	LastSyncError        string `xorm:"VARCHAR(255)"`
+	CreatedUnixTime      int64
+	UpdatedUnixTime      int64
+}
+
+// AssetBinanceConnectRequest represents all parameters of the Binance connect request
+type AssetBinanceConnectRequest struct {
+	ApiKey    string `json:"apiKey" binding:"required,max=128"`
+	ApiSecret string `json:"apiSecret" binding:"required,max=128"`
+}
+
+// AssetBinanceStatusResponse represents the Binance connection state. It never includes the key or secret.
+type AssetBinanceStatusResponse struct {
+	Connected            bool   `json:"connected"`
+	ApiKeyHint           string `json:"apiKeyHint,omitempty"`
+	LastSyncTime         int64  `json:"lastSyncTime"`
+	LastSyncCreatedCount int    `json:"lastSyncCreatedCount"`
+	LastSyncError        string `json:"lastSyncError,omitempty"`
+}
+
+// AssetBinanceSyncResponse represents the result of a Binance trade sync
+type AssetBinanceSyncResponse struct {
+	CreatedCount int    `json:"createdCount"`
+	SkippedCount int    `json:"skippedCount"`
+	PairsChecked int    `json:"pairsChecked"`
+	Error        string `json:"error,omitempty"`
+}
+
+// ToAssetBinanceStatusResponse returns a view-object according to database model, or a disconnected state for nil
+func (c *AssetBinanceConnection) ToAssetBinanceStatusResponse() *AssetBinanceStatusResponse {
+	if c == nil {
+		return &AssetBinanceStatusResponse{}
+	}
+
+	return &AssetBinanceStatusResponse{
+		Connected:            true,
+		ApiKeyHint:           c.ApiKeyHint,
+		LastSyncTime:         c.LastSyncUnixTime,
+		LastSyncCreatedCount: c.LastSyncCreatedCount,
+		LastSyncError:        c.LastSyncError,
+	}
+}

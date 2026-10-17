@@ -1,8 +1,10 @@
 package api
 
 import (
+	"strings"
 	"time"
 
+	"github.com/mayswind/ezbookkeeping/pkg/binance"
 	"github.com/mayswind/ezbookkeeping/pkg/core"
 	"github.com/mayswind/ezbookkeeping/pkg/errs"
 	"github.com/mayswind/ezbookkeeping/pkg/log"
@@ -246,4 +248,88 @@ func (a *AssetsApi) PriceRefreshHandler(c *core.WebContext) (any, *errs.Error) {
 	}
 
 	return response, nil
+}
+
+// BinanceStatusHandler returns whether current user has connected Binance and when it last synced
+func (a *AssetsApi) BinanceStatusHandler(c *core.WebContext) (any, *errs.Error) {
+	uid := c.GetCurrentUid()
+	connection, err := a.assets.GetBinanceConnection(c, uid)
+
+	if err != nil {
+		log.Errorf(c, "[assets.BinanceStatusHandler] failed to get binance connection for user \"uid:%d\", because %s", uid, err.Error())
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	return connection.ToAssetBinanceStatusResponse(), nil
+}
+
+// BinanceConnectHandler checks and stores a read-only Binance API key of current user
+func (a *AssetsApi) BinanceConnectHandler(c *core.WebContext) (any, *errs.Error) {
+	var req models.AssetBinanceConnectRequest
+	err := c.ShouldBindJSON(&req)
+
+	if err != nil {
+		log.Warnf(c, "[assets.BinanceConnectHandler] parse request failed, because %s", err.Error())
+		return nil, errs.NewIncompleteOrIncorrectSubmissionError(err)
+	}
+
+	credentials := binance.Credentials{ApiKey: strings.TrimSpace(req.ApiKey), ApiSecret: strings.TrimSpace(req.ApiSecret)}
+
+	if credentials.ApiKey == "" || credentials.ApiSecret == "" {
+		return nil, errs.ErrAssetBinanceCredentialsEmpty
+	}
+
+	uid := c.GetCurrentUid()
+	err = a.assets.ValidateBinanceCredentials(c, credentials)
+
+	if err != nil {
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	err = a.assets.SaveBinanceConnection(c, uid, credentials)
+
+	if err != nil {
+		log.Errorf(c, "[assets.BinanceConnectHandler] failed to save binance connection for user \"uid:%d\", because %s", uid, err.Error())
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	log.Infof(c, "[assets.BinanceConnectHandler] user \"uid:%d\" has connected binance", uid)
+
+	connection, err := a.assets.GetBinanceConnection(c, uid)
+
+	if err != nil {
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	return connection.ToAssetBinanceStatusResponse(), nil
+}
+
+// BinanceSyncHandler pulls the new Binance spot trades of current user
+func (a *AssetsApi) BinanceSyncHandler(c *core.WebContext) (any, *errs.Error) {
+	uid := c.GetCurrentUid()
+	response, err := a.assets.SyncBinanceTrades(c, uid)
+
+	if err != nil {
+		log.Errorf(c, "[assets.BinanceSyncHandler] failed to sync binance for user \"uid:%d\", because %s", uid, err.Error())
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	log.Infof(c, "[assets.BinanceSyncHandler] user \"uid:%d\" synced binance: %d new, %d skipped", uid, response.CreatedCount, response.SkippedCount)
+
+	return response, nil
+}
+
+// BinanceDisconnectHandler removes the Binance API key of current user, keeping the trades already synced
+func (a *AssetsApi) BinanceDisconnectHandler(c *core.WebContext) (any, *errs.Error) {
+	uid := c.GetCurrentUid()
+	err := a.assets.DeleteBinanceConnection(c, uid)
+
+	if err != nil {
+		log.Errorf(c, "[assets.BinanceDisconnectHandler] failed to delete binance connection for user \"uid:%d\", because %s", uid, err.Error())
+		return nil, errs.Or(err, errs.ErrOperationFailed)
+	}
+
+	log.Infof(c, "[assets.BinanceDisconnectHandler] user \"uid:%d\" has disconnected binance", uid)
+
+	return true, nil
 }

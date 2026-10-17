@@ -388,6 +388,7 @@ type Config struct {
 	EnableRemoveExpiredTokens        bool
 	EnableCreateScheduledTransaction bool
 	EnableRefreshAssetPrices         bool
+	EnableSyncBinanceTrades          bool
 
 	// Secret
 	SecretKeyNoSet                        bool
@@ -1035,6 +1036,7 @@ func loadCronConfiguration(config *Config, configFile *ini.File, sectionName str
 	config.EnableRemoveExpiredTokens = getConfigItemBoolValue(configFile, sectionName, "enable_remove_expired_tokens", false)
 	config.EnableCreateScheduledTransaction = getConfigItemBoolValue(configFile, sectionName, "enable_create_scheduled_transaction", false)
 	config.EnableRefreshAssetPrices = getConfigItemBoolValue(configFile, sectionName, "enable_refresh_asset_prices", false)
+	config.EnableSyncBinanceTrades = getConfigItemBoolValue(configFile, sectionName, "enable_sync_binance_trades", false)
 
 	return nil
 }

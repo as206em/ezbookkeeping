@@ -2,6 +2,9 @@ import { ref } from 'vue';
 import { defineStore } from 'pinia';
 
 import type {
+    AssetBinanceConnectRequest,
+    AssetBinanceStatusResponse,
+    AssetBinanceSyncResponse,
     AssetHoldingInfoResponse,
     AssetPriceRefreshResponse,
     AssetPriceSetRequest,
@@ -29,10 +32,75 @@ function rejectWith(error: { processed?: boolean; response?: { data?: { errorMes
 export const useAssetsStore = defineStore('assets', () => {
     const allHoldings = ref<AssetHoldingInfoResponse[]>([]);
     const allTrades = ref<AssetTradeInfoResponse[]>([]);
+    const binanceStatus = ref<AssetBinanceStatusResponse>({ connected: false, lastSyncTime: 0, lastSyncCreatedCount: 0 });
 
     function resetAssets(): void {
         allHoldings.value = [];
         allTrades.value = [];
+        binanceStatus.value = { connected: false, lastSyncTime: 0, lastSyncCreatedCount: 0 };
+    }
+
+    function loadBinanceStatus(): Promise<AssetBinanceStatusResponse> {
+        return new Promise((resolve, reject) => {
+            services.getAssetBinanceStatus().then(response => {
+                const data = response.data;
+
+                if (!data || !data.success || !data.result) {
+                    reject({ message: 'Unable to retrieve the Binance connection' });
+                    return;
+                }
+
+                binanceStatus.value = data.result;
+                resolve(data.result);
+            }).catch(error => rejectWith(error, 'Unable to retrieve the Binance connection', reject));
+        });
+    }
+
+    function connectBinance(req: AssetBinanceConnectRequest): Promise<AssetBinanceStatusResponse> {
+        return new Promise((resolve, reject) => {
+            services.connectAssetBinance(req).then(response => {
+                const data = response.data;
+
+                if (!data || !data.success || !data.result) {
+                    reject({ message: 'Unable to connect Binance' });
+                    return;
+                }
+
+                binanceStatus.value = data.result;
+                resolve(data.result);
+            }).catch(error => rejectWith(error, 'Unable to connect Binance', reject));
+        });
+    }
+
+    function syncBinance(): Promise<AssetBinanceSyncResponse> {
+        return new Promise((resolve, reject) => {
+            services.syncAssetBinance().then(response => {
+                const data = response.data;
+
+                if (!data || !data.success || !data.result) {
+                    reject({ message: 'Unable to sync Binance' });
+                    return;
+                }
+
+                resolve(data.result);
+            }).catch(error => rejectWith(error, 'Unable to sync Binance', reject));
+        });
+    }
+
+    function disconnectBinance(): Promise<void> {
+        return new Promise((resolve, reject) => {
+            services.disconnectAssetBinance().then(response => {
+                const data = response.data;
+
+                if (!data || !data.success || !data.result) {
+                    reject({ message: 'Unable to disconnect Binance' });
+                    return;
+                }
+
+                binanceStatus.value = { connected: false, lastSyncTime: 0, lastSyncCreatedCount: 0 };
+                resolve();
+            }).catch(error => rejectWith(error, 'Unable to disconnect Binance', reject));
+        });
     }
 
     function loadAssets(): Promise<void> {
@@ -150,8 +218,13 @@ export const useAssetsStore = defineStore('assets', () => {
         // states
         allHoldings,
         allTrades,
+        binanceStatus,
         // functions
         resetAssets,
+        loadBinanceStatus,
+        connectBinance,
+        syncBinance,
+        disconnectBinance,
         loadAssets,
         addTrade,
         modifyTrade,

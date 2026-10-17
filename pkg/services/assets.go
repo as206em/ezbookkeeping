@@ -17,12 +17,14 @@ import (
 	"github.com/mayswind/ezbookkeeping/pkg/errs"
 	"github.com/mayswind/ezbookkeeping/pkg/log"
 	"github.com/mayswind/ezbookkeeping/pkg/models"
+	"github.com/mayswind/ezbookkeeping/pkg/settings"
 	"github.com/mayswind/ezbookkeeping/pkg/uuid"
 )
 
 // AssetService represents asset trade and price service
 type AssetService struct {
 	ServiceUsingDB
+	ServiceUsingConfig
 	ServiceUsingUuid
 }
 
@@ -31,6 +33,9 @@ var (
 	Assets = &AssetService{
 		ServiceUsingDB: ServiceUsingDB{
 			container: datastore.Container,
+		},
+		ServiceUsingConfig: ServiceUsingConfig{
+			container: settings.Container,
 		},
 		ServiceUsingUuid: ServiceUsingUuid{
 			container: uuid.Container,
@@ -317,7 +322,7 @@ func (s *AssetService) DeleteTrade(c core.Context, uid int64, tradeId int64) err
 	})
 }
 
-// DeleteAllTradesAndPrices deletes all trades and prices of a user
+// DeleteAllTradesAndPrices deletes all trades, prices and the Binance connection of a user
 func (s *AssetService) DeleteAllTradesAndPrices(c core.Context, uid int64) error {
 	if uid <= 0 {
 		return errs.ErrUserIdInvalid
@@ -331,6 +336,12 @@ func (s *AssetService) DeleteAllTradesAndPrices(c core.Context, uid int64) error
 		}
 
 		_, err = sess.Where("uid=?", uid).Delete(&models.AssetPrice{})
+
+		if err != nil {
+			return err
+		}
+
+		_, err = sess.Where("uid=?", uid).Delete(&models.AssetBinanceConnection{})
 
 		return err
 	})

@@ -78,3 +78,23 @@ export interface AssetPriceRefreshMarketResult {
 export interface AssetPriceRefreshResponse {
     readonly markets: AssetPriceRefreshMarketResult[];
 }
+
+export interface AssetBinanceStatusResponse {
+    readonly connected: boolean;
+    readonly apiKeyHint?: string;
+    readonly lastSyncTime: number; // unix seconds, 0 when never synced
+    readonly lastSyncCreatedCount: number;
+    readonly lastSyncError?: string;
+}
+
+export interface AssetBinanceConnectRequest {
+    readonly apiKey: string;
+    readonly apiSecret: string;
+}
+
+export interface AssetBinanceSyncResponse {
+    readonly createdCount: number;
+    readonly skippedCount: number;
+    readonly pairsChecked: number;
+    readonly error?: string;
+}

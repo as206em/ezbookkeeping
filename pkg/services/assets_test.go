@@ -28,7 +28,10 @@ func initializeAssetServiceTest(t *testing.T) core.Context {
 		},
 		UuidGeneratorType: "internal",
 		UuidServerId:      0,
+		SecretKey:         "test-secret-key",
 	}
+
+	settings.SetCurrentConfig(config)
 
 	require.NoError(t, datastore.InitializeDataStore(config))
 	require.NoError(t, uuid.InitializeUuidGenerator(config))
@@ -37,6 +40,7 @@ func initializeAssetServiceTest(t *testing.T) core.Context {
 	})
 	require.NoError(t, datastore.Container.UserDataStore.SyncStructs(new(models.AssetTrade)))
 	require.NoError(t, datastore.Container.UserDataStore.SyncStructs(new(models.AssetPrice)))
+	require.NoError(t, datastore.Container.UserDataStore.SyncStructs(new(models.AssetBinanceConnection)))
 
 	return core.NewNullContext()
 }

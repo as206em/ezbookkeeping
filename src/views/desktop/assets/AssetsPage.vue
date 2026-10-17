@@ -48,6 +48,35 @@
 
         <v-col cols="12">
             <v-card :class="{ disabled: loading }">
+                <v-card-text class="d-flex align-center flex-wrap gap-3">
+                    <div class="flex-grow-1">
+                        <div class="font-weight-medium">Binance</div>
+                        <div class="text-body-medium text-medium-emphasis" v-if="!binanceStatus.connected">
+                            Connect a read-only API key to pull your spot trades automatically, once a day or whenever you press Sync now.
+                        </div>
+                        <template v-else>
+                            <div class="text-body-medium text-medium-emphasis">
+                                Connected with the key ending {{ binanceStatus.apiKeyHint }} ·
+                                <span v-if="binanceStatus.lastSyncTime">last synced {{ formatDateTime(binanceStatus.lastSyncTime) }}, {{ binanceStatus.lastSyncCreatedCount }} new trade{{ binanceStatus.lastSyncCreatedCount === 1 ? '' : 's' }}</span>
+                                <span v-else>not synced yet</span>
+                            </div>
+                            <div class="text-body-medium text-warning" v-if="binanceStatus.lastSyncError">{{ binanceStatus.lastSyncError }}</div>
+                        </template>
+                    </div>
+                    <template v-if="!binanceStatus.connected">
+                        <v-btn variant="tonal" :disabled="syncing" @click="connectBinance">Connect Binance</v-btn>
+                    </template>
+                    <template v-else>
+                        <v-progress-circular indeterminate size="20" v-if="syncing"/>
+                        <v-btn variant="tonal" :prepend-icon="mdiSync" :disabled="syncing" @click="syncBinance">Sync now</v-btn>
+                        <v-btn variant="text" color="error" :disabled="syncing" @click="disconnectBinance">Disconnect</v-btn>
+                    </template>
+                </v-card-text>
+            </v-card>
+        </v-col>
+
+        <v-col cols="12">
+            <v-card :class="{ disabled: loading }">
                 <v-card-text class="d-flex align-center flex-wrap gap-4">
                     <v-btn-toggle mandatory density="comfortable" color="primary" variant="outlined" divided v-model="marketFilter">
                         <v-btn value="">All</v-btn>
@@ -174,6 +203,7 @@
 
     <asset-trade-dialog ref="tradeDialog"/>
     <asset-import-dialog ref="importDialog"/>
+    <asset-binance-dialog ref="binanceDialog"/>
     <confirm-dialog ref="confirmDialog"/>
     <snack-bar ref="snackbar"/>
 </template>
@@ -183,6 +213,7 @@ import ConfirmDialog from '@/components/desktop/ConfirmDialog.vue';
 import SnackBar from '@/components/desktop/SnackBar.vue';
 import AssetTradeDialog from './AssetTradeDialog.vue';
 import AssetImportDialog from './AssetImportDialog.vue';
+import AssetBinanceDialog from './AssetBinanceDialog.vue';
 
 import { ref, reactive, computed, onMounted, useTemplateRef } from 'vue';
 
@@ -203,12 +234,13 @@ import {
 } from '@/lib/asset.ts';
 import { parseBigDecimal } from '@/lib/numeral.ts';
 
-import { mdiChevronDown, mdiChevronRight, mdiDeleteOutline, mdiPencilOutline, mdiPlus, mdiRefresh, mdiUpload } from '@mdi/js';
+import { mdiChevronDown, mdiChevronRight, mdiDeleteOutline, mdiPencilOutline, mdiPlus, mdiRefresh, mdiSync, mdiUpload } from '@mdi/js';
 
 type SnackBarType = InstanceType<typeof SnackBar>;
 type ConfirmDialogType = InstanceType<typeof ConfirmDialog>;
 type TradeDialogType = InstanceType<typeof AssetTradeDialog>;
 type ImportDialogType = InstanceType<typeof AssetImportDialog>;
+type BinanceDialogType = InstanceType<typeof AssetBinanceDialog>;
 
 const filterMarkets = [AssetMarket.DFM, AssetMarket.ADX, AssetMarket.Crypto, AssetMarket.Manual];
 
@@ -221,9 +253,11 @@ const snackbar = useTemplateRef<SnackBarType>('snackbar');
 const confirmDialog = useTemplateRef<ConfirmDialogType>('confirmDialog');
 const tradeDialog = useTemplateRef<TradeDialogType>('tradeDialog');
 const importDialog = useTemplateRef<ImportDialogType>('importDialog');
+const binanceDialog = useTemplateRef<BinanceDialogType>('binanceDialog');
 
 const loading = ref<boolean>(true);
 const refreshing = ref<boolean>(false);
+const syncing = ref<boolean>(false);
 const showSold = ref<boolean>(false);
 const marketFilter = ref<AssetMarket | ''>('');
 const expanded = reactive<Record<string, boolean>>({});
@@ -231,6 +265,7 @@ const priceDialog = reactive({ show: false, market: AssetMarket.DFM as AssetMark
 
 const defaultCurrency = computed<string>(() => userStore.currentUserDefaultCurrency);
 const allHoldings = computed(() => assetsStore.allHoldings);
+const binanceStatus = computed(() => assetsStore.binanceStatus);
 const visibleHoldings = computed(() => filterHoldings(allHoldings.value, showSold.value, marketFilter.value));
 
 // Amounts in the app are whole minor units (cents), so values are converted to cents, exchanged, and shown back in whole units.
@@ -332,7 +367,8 @@ function load(): void {
     Promise.all([
         accountsStore.loadAllAccounts({ force: false }),
         exchangeRatesStore.getLatestExchangeRates({ silent: true, force: false }),
-        assetsStore.loadAssets()
+        assetsStore.loadAssets(),
+        assetsStore.loadBinanceStatus()
     ]).then(() => {
         loading.value = false;
     }).catch(error => {
@@ -408,6 +444,47 @@ function savePrice(): void {
         return reloadAssets();
     }).catch(error => {
         snackbar.value?.showError(error);
+    });
+}
+
+function connectBinance(): void {
+    binanceDialog.value?.open().then(() => {
+        snackbar.value?.showMessage('Binance connected. Reading your trade history…');
+        syncBinance();
+    }).catch(() => {});
+}
+
+function syncBinance(): void {
+    syncing.value = true;
+
+    assetsStore.syncBinance().then(result => {
+        if (result.error) {
+            snackbar.value?.showMessage(result.createdCount
+                ? `Added ${result.createdCount} trades, but the sync did not finish. ${result.error}`
+                : result.error);
+        } else {
+            snackbar.value?.showMessage(result.createdCount
+                ? `Added ${result.createdCount} new Binance trade${result.createdCount === 1 ? '' : 's'}`
+                : 'No new Binance trades');
+        }
+
+        return Promise.all([reloadAssets(), assetsStore.loadBinanceStatus()]);
+    }).catch(error => {
+        snackbar.value?.showError(error);
+    }).finally(() => {
+        syncing.value = false;
+    });
+}
+
+function disconnectBinance(): void {
+    confirmDialog.value?.open('Disconnect Binance? Trades already synced stay in your list, new ones will no longer be pulled.', { color: 'error' }).then(() => {
+        return assetsStore.disconnectBinance().then(() => {
+            snackbar.value?.showMessage('Binance disconnected');
+        });
+    }).catch(error => {
+        if (error) {
+            snackbar.value?.showError(error);
+        }
     });
 }
 

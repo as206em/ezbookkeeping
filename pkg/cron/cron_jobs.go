@@ -67,3 +67,15 @@ var RefreshAssetPricesAfterCloseJob = &CronJob{
 		return services.Assets.RefreshPricesOfAllUsers(c)
 	},
 }
+
+// SyncBinanceTradesJob represents the cron job which pulls new Binance spot trades for users who connected Binance (03:00 server time)
+var SyncBinanceTradesJob = &CronJob{
+	Name:        "SyncBinanceTrades",
+	Description: "Pull new Binance spot trades for users who connected a read-only API key.",
+	Period: CronJobFixedHourPeriod{
+		Hour: 3,
+	},
+	Run: func(c *core.CronContext) error {
+		return services.Assets.SyncBinanceTradesOfAllUsers(c)
+	},
+}

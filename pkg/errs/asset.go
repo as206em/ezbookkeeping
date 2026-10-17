@@ -18,3 +18,11 @@ var (
 	ErrAssetSymbolHasNoTrades     = NewNormalError(NormalSubcategoryAsset, 11, http.StatusBadRequest, "asset has no trades")
 	ErrAssetPriceRefreshUnsupport = NewNormalError(NormalSubcategoryAsset, 12, http.StatusBadRequest, "there is no automatic price source for this market")
 )
+
+// Error codes related to the Binance connection of assets
+var (
+	ErrAssetBinanceNotConnected     = NewNormalError(NormalSubcategoryAsset, 13, http.StatusBadRequest, "binance is not connected")
+	ErrAssetBinanceKeyInvalid       = NewNormalError(NormalSubcategoryAsset, 14, http.StatusBadRequest, "binance did not accept this api key, check the key and secret and that reading is enabled")
+	ErrAssetBinanceKeyNotReadOnly   = NewNormalError(NormalSubcategoryAsset, 15, http.StatusBadRequest, "this api key can trade or withdraw, use a read-only key")
+	ErrAssetBinanceCredentialsEmpty = NewNormalError(NormalSubcategoryAsset, 16, http.StatusBadRequest, "api key and secret are required")
+)

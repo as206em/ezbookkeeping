@@ -133,6 +133,14 @@ func updateAllDatabaseTablesStructure(c *core.CliContext) error {
 
 	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] asset price table maintained successfully")
 
+	err = datastore.Container.UserDataStore.SyncStructs(new(models.AssetBinanceConnection))
+
+	if err != nil {
+		return err
+	}
+
+	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] asset binance connection table maintained successfully")
+
 	err = datastore.Container.UserDataStore.SyncStructs(new(models.TransactionTagGroup))
 
 	if err != nil {

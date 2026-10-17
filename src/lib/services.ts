@@ -47,6 +47,9 @@ import type {
     TransactionCategoryMerchantDeleteRequest
 } from '@/models/transaction_category_merchant.ts';
 import type {
+    AssetBinanceConnectRequest,
+    AssetBinanceStatusResponse,
+    AssetBinanceSyncResponse,
     AssetHoldingInfoResponse,
     AssetPriceRefreshResponse,
     AssetPriceSetRequest,
@@ -496,6 +499,19 @@ export default {
     },
     refreshAssetPrices: (): ApiResponsePromise<AssetPriceRefreshResponse> => {
         return axios.post<ApiResponse<AssetPriceRefreshResponse>>('v1/assets/prices/refresh.json');
+    },
+    getAssetBinanceStatus: (): ApiResponsePromise<AssetBinanceStatusResponse> => {
+        return axios.get<ApiResponse<AssetBinanceStatusResponse>>('v1/assets/binance/status.json');
+    },
+    connectAssetBinance: (req: AssetBinanceConnectRequest): ApiResponsePromise<AssetBinanceStatusResponse> => {
+        return axios.post<ApiResponse<AssetBinanceStatusResponse>>('v1/assets/binance/connect.json', req);
+    },
+    syncAssetBinance: (): ApiResponsePromise<AssetBinanceSyncResponse> => {
+        // the first sync reads the whole trade history, so it can take much longer than a normal request
+        return axios.post<ApiResponse<AssetBinanceSyncResponse>>('v1/assets/binance/sync.json', undefined, { timeout: 5 * 60 * 1000 });
+    },
+    disconnectAssetBinance: (): ApiResponsePromise<boolean> => {
+        return axios.post<ApiResponse<boolean>>('v1/assets/binance/disconnect.json');
     },
     getAllCategoryBudgets: (): ApiResponsePromise<CategoryBudgetInfoResponse[]> => {
         return axios.get<ApiResponse<CategoryBudgetInfoResponse[]>>('v1/transaction/categories/budgets/list.json');
