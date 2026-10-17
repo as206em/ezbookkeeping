@@ -1,244 +1,256 @@
 <template>
-    <v-row class="align-content-start">
-        <v-col cols="12">
-            <v-card :class="{ disabled: loading }">
-                <template #title>
-                    <div class="d-flex align-center flex-wrap gap-2">
-                        <span>Assets</span>
-                        <v-progress-circular indeterminate size="20" class="ms-3" v-if="loading || refreshing"/>
-                        <v-spacer/>
-                        <v-btn variant="tonal" :prepend-icon="mdiRefresh" :disabled="loading || refreshing" @click="refreshPrices">Refresh prices</v-btn>
-                        <v-btn variant="tonal" :prepend-icon="mdiUpload" :disabled="loading" @click="importTrades">Import CSV</v-btn>
-                        <v-btn color="primary" :prepend-icon="mdiPlus" :disabled="loading" @click="addTrade()">Add trade</v-btn>
-                    </div>
-                </template>
+    <main-page-layout>
+        <template #nav-items>
+            <li class="nav-link" :key="item.value" v-for="item in marketNavItems">
+                <a class="d-flex align-center cursor-pointer my-1"
+                   :class="{ 'router-link-active router-link-exact-active': marketFilter === item.value, 'disabled': loading }"
+                   @click="marketFilter = item.value">
+                    <v-icon class="nav-item-icon" :icon="item.icon"/>
+                    <span class="nav-item-title text-truncate">{{ item.name }}</span>
+                </a>
+            </li>
+        </template>
 
-                <v-card-text>
-                    <v-row>
-                        <v-col cols="12" sm="6" md="3">
-                            <div class="text-body-medium text-medium-emphasis">Net worth</div>
-                            <div class="text-h5">{{ formatSummaryAmount(netWorth) }}</div>
-                            <div class="text-body-medium text-medium-emphasis">Accounts {{ formatSummaryAmount(cashBalance) }} + assets</div>
-                        </v-col>
-                        <v-col cols="12" sm="6" md="3">
-                            <div class="text-body-medium text-medium-emphasis">Assets value</div>
-                            <div class="text-h5">{{ formatSummaryAmount(summary.value) }}</div>
-                            <div class="text-body-medium text-medium-emphasis" v-if="summary.unpricedHoldingCount">
-                                {{ summary.unpricedHoldingCount }} without a price
+        <template #content>
+            <v-row class="align-content-start">
+                <v-col cols="12">
+                    <v-card :class="{ disabled: loading }">
+                        <template #title>
+                            <div class="d-flex align-center flex-wrap gap-2">
+                                <span>Assets</span>
+                                <v-progress-circular indeterminate size="20" class="ms-3" v-if="loading || refreshing"/>
+                                <v-spacer/>
+                                <v-btn variant="tonal" :prepend-icon="mdiRefresh" :disabled="loading || refreshing" @click="refreshPrices">Refresh prices</v-btn>
+                                <v-btn variant="tonal" :prepend-icon="mdiUpload" :disabled="loading" @click="importTrades">Import CSV</v-btn>
+                                <v-btn color="primary" :prepend-icon="mdiPlus" :disabled="loading" @click="addTrade()">Add trade</v-btn>
                             </div>
-                        </v-col>
-                        <v-col cols="12" sm="6" md="3">
-                            <div class="text-body-medium text-medium-emphasis">Unrealized profit</div>
-                            <div class="text-h5" :class="profitClass(summary.unrealizedProfit)">{{ formatSummaryAmount(summary.unrealizedProfit, true) }}</div>
-                        </v-col>
-                        <v-col cols="12" sm="6" md="3">
-                            <div class="text-body-medium text-medium-emphasis">Realized profit</div>
-                            <div class="text-h5" :class="profitClass(summary.realizedProfit)">{{ formatSummaryAmount(summary.realizedProfit, true) }}</div>
-                        </v-col>
-                    </v-row>
-                    <template v-if="allocation.length">
-                        <div class="d-flex mt-4 asset-allocation-bar" role="img" aria-label="Allocation of your wealth">
-                            <div :key="item.key" :style="{ flexGrow: item.share, background: ALLOCATION_COLORS[item.key] }" v-for="item in allocation"/>
-                        </div>
-                        <div class="d-flex flex-wrap gap-4 mt-2 text-body-medium text-medium-emphasis">
-                            <span :key="item.key" v-for="item in allocation">
-                                <span class="asset-allocation-dot" :style="{ background: ALLOCATION_COLORS[item.key] }"/>{{ item.label }} {{ Math.round(item.share * 100) }}%
-                            </span>
-                        </div>
-                    </template>
-                    <div class="text-body-medium text-medium-emphasis mt-3" v-if="summary.incomplete">
-                        Some amounts could not be converted to {{ defaultCurrency }} because an exchange rate is missing, so totals are partial.
-                    </div>
-                    <div class="text-body-medium text-medium-emphasis mt-3" v-if="lastPriceTime">
-                        Prices as of {{ formatDateTime(lastPriceTime) }}. DFM and crypto refresh automatically twice a day; ADX prices are set by hand.
-                    </div>
-                </v-card-text>
-            </v-card>
-        </v-col>
-
-        <v-col cols="12">
-            <v-card :class="{ disabled: loading }">
-                <template #title>
-                    <div class="d-flex align-center flex-wrap gap-2">
-                        <span>Assets over time</span>
-                        <v-spacer/>
-                        <v-btn-toggle mandatory density="compact" color="primary" variant="outlined" divided v-model="historyRangeDays">
-                            <v-btn :value="range.days" :key="range.label" v-for="range in ASSET_HISTORY_RANGES">{{ range.label }}</v-btn>
-                        </v-btn-toggle>
-                    </div>
-                </template>
-                <v-card-text>
-                    <asset-history-chart :points="historyPoints" :format-amount="formatSummaryAmount" v-if="historyPoints.length >= 2"/>
-                    <div class="text-medium-emphasis py-6 text-center" v-else>
-                        The chart fills in as days go by. A point is saved every day and whenever your prices or trades change, so it shows the value of your assets, not your cash accounts.
-                    </div>
-                    <div class="text-body-medium text-medium-emphasis" v-if="historyIncomplete">
-                        Some days are understated because an exchange rate to {{ defaultCurrency }} is missing.
-                    </div>
-                </v-card-text>
-            </v-card>
-        </v-col>
-
-        <v-col cols="12">
-            <v-card :class="{ disabled: loading }">
-                <v-card-text class="d-flex align-center flex-wrap gap-3">
-                    <div class="flex-grow-1">
-                        <div class="font-weight-medium">Binance</div>
-                        <div class="text-body-medium text-medium-emphasis" v-if="!binanceStatus.connected">
-                            Connect a read-only API key to pull your spot trades automatically, once a day or whenever you press Sync now.
-                        </div>
-                        <template v-else>
-                            <div class="text-body-medium text-medium-emphasis">
-                                Connected with the key ending {{ binanceStatus.apiKeyHint }} ·
-                                <span v-if="binanceStatus.lastSyncTime">last synced {{ formatDateTime(binanceStatus.lastSyncTime) }}, {{ binanceStatus.lastSyncCreatedCount }} new trade{{ binanceStatus.lastSyncCreatedCount === 1 ? '' : 's' }}</span>
-                                <span v-else>not synced yet</span>
-                            </div>
-                            <div class="text-body-medium text-warning" v-if="binanceStatus.lastSyncError">{{ binanceStatus.lastSyncError }}</div>
                         </template>
-                    </div>
-                    <template v-if="!binanceStatus.connected">
-                        <v-btn variant="tonal" :disabled="syncing" @click="connectBinance">Connect Binance</v-btn>
-                    </template>
-                    <template v-else>
-                        <v-progress-circular indeterminate size="20" v-if="syncing"/>
-                        <v-btn variant="tonal" :prepend-icon="mdiSync" :disabled="syncing" @click="syncBinance">Sync now</v-btn>
-                        <v-btn variant="text" color="error" :disabled="syncing" @click="disconnectBinance">Disconnect</v-btn>
-                    </template>
-                </v-card-text>
-            </v-card>
-        </v-col>
 
-        <v-col cols="12">
-            <v-card :class="{ disabled: loading }">
-                <v-card-text class="d-flex align-center flex-wrap gap-4">
-                    <v-btn-toggle mandatory density="comfortable" color="primary" variant="outlined" divided v-model="marketFilter">
-                        <v-btn value="">All</v-btn>
-                        <v-btn :value="market" :key="market" v-for="market in filterMarkets">{{ ASSET_MARKET_NAMES[market] }}</v-btn>
-                    </v-btn-toggle>
-                    <v-spacer/>
-                    <v-switch hide-details density="compact" color="primary" label="Show sold positions" v-model="showSold"/>
-                </v-card-text>
-
-                <v-table class="asset-holding-table" hover>
-                    <thead>
-                        <tr>
-                            <th>Asset</th>
-                            <th class="text-end">Quantity</th>
-                            <th class="text-end">Avg buy</th>
-                            <th class="text-end">Price</th>
-                            <th class="text-end">Value</th>
-                            <th class="text-end">Profit</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <template :key="holdingKey(holding)" v-for="holding in visibleHoldings">
-                            <tr class="cursor-pointer" @click="toggleExpanded(holding)">
-                                <td>
-                                    <div class="d-flex align-center">
-                                        <v-icon size="18" class="me-2" :icon="isExpanded(holding) ? mdiChevronDown : mdiChevronRight"/>
-                                        <div>
-                                            <div>
-                                                <span class="font-weight-medium">{{ holding.symbol }}</span>
-                                                <v-chip class="ms-2" size="x-small" variant="tonal" v-if="isHoldingSold(holding)">Sold</v-chip>
-                                                <v-chip class="ms-2" size="x-small" variant="tonal" color="warning" v-if="holding.oversold">Check history</v-chip>
-                                            </div>
-                                            <div class="text-body-medium text-medium-emphasis">{{ ASSET_MARKET_NAMES[holding.market] }}</div>
-                                        </div>
+                        <v-card-text>
+                            <v-row>
+                                <v-col cols="12" sm="6" md="3">
+                                    <div class="text-body-medium text-medium-emphasis">Net worth</div>
+                                    <div class="text-h5">{{ formatSummaryAmount(netWorth) }}</div>
+                                    <div class="text-body-medium text-medium-emphasis">Accounts {{ formatSummaryAmount(cashBalance) }} + assets</div>
+                                </v-col>
+                                <v-col cols="12" sm="6" md="3">
+                                    <div class="text-body-medium text-medium-emphasis">Assets value</div>
+                                    <div class="text-h5">{{ formatSummaryAmount(summary.value) }}</div>
+                                    <div class="text-body-medium text-medium-emphasis" v-if="summary.unpricedHoldingCount">
+                                        {{ summary.unpricedHoldingCount }} without a price
                                     </div>
-                                </td>
-                                <template v-if="isHoldingSold(holding)">
-                                    <td class="text-end text-medium-emphasis">—</td>
-                                    <td class="text-end text-medium-emphasis">—</td>
-                                    <td class="text-end text-medium-emphasis">—</td>
-                                    <td class="text-end text-medium-emphasis">—</td>
-                                </template>
-                                <template v-else>
-                                    <td class="text-end">{{ formatQuantity(holding.quantity) }}</td>
-                                    <td class="text-end">{{ formatPrice(holding.averageCost, holding.currency) }}</td>
-                                    <td class="text-end">
-                                        <div class="d-inline-flex align-center">
-                                            <span v-if="holding.hasPrice">{{ formatPrice(holding.price, holding.priceCurrency || holding.currency) }}</span>
-                                            <v-chip size="small" color="warning" variant="tonal" v-else>Set price</v-chip>
-                                            <v-btn class="ms-1" density="compact" variant="text" size="small" :icon="mdiPencilOutline"
-                                                   aria-label="Set price" @click.stop="editPrice(holding)"/>
-                                        </div>
-                                        <div class="text-body-medium text-medium-emphasis" v-if="holding.hasPrice">{{ describePrice(holding) }}</div>
-                                    </td>
-                                    <td class="text-end">{{ holding.hasPrice ? formatPrice(holding.value, holding.priceCurrency || holding.currency, 0) : '—' }}</td>
-                                </template>
-                                <td class="text-end" :class="profitClass(holdingProfit(holding))">
-                                    <template v-if="isHoldingSold(holding) || holding.hasPrice">
-                                        <div>{{ formatPrice(holdingProfit(holding), holding.currency, 0, true) }}</div>
-                                        <div class="text-body-medium" v-if="getHoldingProfitRatio(holding) !== null">{{ formatRatio(getHoldingProfitRatio(holding)!) }}</div>
-                                    </template>
-                                    <span class="text-medium-emphasis" v-else>—</span>
-                                </td>
-                            </tr>
-                            <tr class="asset-trade-rows" v-if="isExpanded(holding)">
-                                <td colspan="6" class="pa-0">
-                                    <v-table density="compact" class="bg-transparent">
-                                        <tbody>
-                                            <tr :key="trade.id" v-for="trade in tradesOf(holding)">
-                                                <td class="ps-10">{{ formatDate(trade.tradeTime) }}</td>
-                                                <td>{{ trade.side === AssetTradeSide.Buy ? 'Buy' : 'Sell' }}</td>
-                                                <td class="text-end">{{ formatQuantity(trade.quantity) }} @ {{ formatPrice(trade.price, trade.currency) }}</td>
-                                                <td class="text-end text-medium-emphasis">{{ trade.fee ? `fee ${formatPrice(trade.fee, trade.currency)}` : '' }}</td>
-                                                <td class="text-end" :class="profitClass(trade.realizedProfit ?? 0)">
-                                                    {{ trade.realizedProfit !== undefined ? `realized ${formatPrice(trade.realizedProfit, trade.currency, 0, true)}` : '' }}
-                                                </td>
-                                                <td class="text-end">
-                                                    <v-btn density="compact" variant="text" size="small" :icon="mdiPencilOutline" aria-label="Edit trade" @click.stop="editTrade(trade)"/>
-                                                    <v-btn density="compact" variant="text" size="small" color="error" :icon="mdiDeleteOutline" aria-label="Delete trade" @click.stop="deleteTrade(trade)"/>
-                                                </td>
-                                            </tr>
-                                        </tbody>
-                                    </v-table>
-                                    <div class="px-4 py-2 text-body-medium text-medium-emphasis" v-if="holding.oversold">
-                                        Sells in this history add up to more than the buys. Earlier buys are probably missing, so profit here may be overstated.
-                                    </div>
-                                </td>
-                            </tr>
-                        </template>
-                        <tr v-if="!visibleHoldings.length">
-                            <td colspan="6" class="text-center py-8">
-                                <div class="text-h6" v-if="!allHoldings.length">Start tracking your assets</div>
-                                <div class="text-medium-emphasis mb-4" v-if="!allHoldings.length">
-                                    Add a trade, import your DFM, ADX or Binance trades from a CSV, or add something like gold as a manual asset.
+                                </v-col>
+                                <v-col cols="12" sm="6" md="3">
+                                    <div class="text-body-medium text-medium-emphasis">Unrealized profit</div>
+                                    <div class="text-h5" :class="profitClass(summary.unrealizedProfit)">{{ formatSummaryAmount(summary.unrealizedProfit, true) }}</div>
+                                </v-col>
+                                <v-col cols="12" sm="6" md="3">
+                                    <div class="text-body-medium text-medium-emphasis">Realized profit</div>
+                                    <div class="text-h5" :class="profitClass(summary.realizedProfit)">{{ formatSummaryAmount(summary.realizedProfit, true) }}</div>
+                                </v-col>
+                            </v-row>
+                            <template v-if="allocation.length">
+                                <div class="d-flex mt-4 asset-allocation-bar" role="img" aria-label="Allocation of your wealth">
+                                    <div :key="item.key" :style="{ flexGrow: item.share, background: ALLOCATION_COLORS[item.key] }" v-for="item in allocation"/>
                                 </div>
-                                <div class="text-medium-emphasis" v-else>Nothing to show with these filters.</div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </v-table>
-            </v-card>
-        </v-col>
-    </v-row>
+                                <div class="d-flex flex-wrap gap-4 mt-2 text-body-medium text-medium-emphasis">
+                                    <span :key="item.key" v-for="item in allocation">
+                                        <span class="asset-allocation-dot" :style="{ background: ALLOCATION_COLORS[item.key] }"/>{{ item.label }} {{ Math.round(item.share * 100) }}%
+                                    </span>
+                                </div>
+                            </template>
+                            <div class="text-body-medium text-medium-emphasis mt-3" v-if="summary.incomplete">
+                                Some amounts could not be converted to {{ defaultCurrency }} because an exchange rate is missing, so totals are partial.
+                            </div>
+                            <div class="text-body-medium text-medium-emphasis mt-3" v-if="lastPriceTime">
+                                Prices as of {{ formatDateTime(lastPriceTime) }}. DFM and crypto refresh automatically twice a day; ADX prices are set by hand.
+                            </div>
+                        </v-card-text>
+                    </v-card>
+                </v-col>
 
-    <v-dialog width="420" v-model="priceDialog.show">
-        <v-card class="dialog-layout-card">
-            <v-toolbar color="primary">
-                <v-toolbar-title>Set price of {{ priceDialog.symbol }}</v-toolbar-title>
-            </v-toolbar>
-            <v-card-text class="pa-4">
-                <v-text-field type="number" min="0" step="any" autofocus label="Price per unit" :suffix="priceDialog.currency"
-                              v-model="priceDialog.price" @keyup.enter="savePrice"/>
-                <div class="text-body-medium text-medium-emphasis">
-                    This price is used until the next automatic refresh. ADX prices and manual assets are only changed by you.
-                </div>
-            </v-card-text>
-            <v-card-actions class="px-4 pb-4">
-                <v-spacer/>
-                <v-btn color="gray" @click="priceDialog.show = false">Cancel</v-btn>
-                <v-btn color="primary" @click="savePrice">Save price</v-btn>
-            </v-card-actions>
-        </v-card>
-    </v-dialog>
+                <v-col cols="12">
+                    <v-card :class="{ disabled: loading }">
+                        <template #title>
+                            <div class="d-flex align-center flex-wrap gap-2">
+                                <span>Assets over time</span>
+                                <v-spacer/>
+                                <v-btn-toggle mandatory density="compact" color="primary" variant="outlined" divided v-model="historyRangeDays">
+                                    <v-btn :value="range.days" :key="range.label" v-for="range in ASSET_HISTORY_RANGES">{{ range.label }}</v-btn>
+                                </v-btn-toggle>
+                            </div>
+                        </template>
+                        <v-card-text>
+                            <asset-history-chart :points="historyPoints" :format-amount="formatSummaryAmount" v-if="historyPoints.length >= 2"/>
+                            <div class="text-medium-emphasis py-6 text-center" v-else>
+                                The chart fills in as days go by. A point is saved every day and whenever your prices or trades change, so it shows the value of your assets, not your cash accounts.
+                            </div>
+                            <div class="text-body-medium text-medium-emphasis" v-if="historyIncomplete">
+                                Some days are understated because an exchange rate to {{ defaultCurrency }} is missing.
+                            </div>
+                        </v-card-text>
+                    </v-card>
+                </v-col>
 
-    <asset-trade-dialog ref="tradeDialog"/>
-    <asset-import-dialog ref="importDialog"/>
-    <asset-binance-dialog ref="binanceDialog"/>
-    <confirm-dialog ref="confirmDialog"/>
-    <snack-bar ref="snackbar"/>
+                <v-col cols="12">
+                    <v-card :class="{ disabled: loading }">
+                        <v-card-text class="d-flex align-center flex-wrap gap-3">
+                            <div class="flex-grow-1">
+                                <div class="font-weight-medium">Binance</div>
+                                <div class="text-body-medium text-medium-emphasis" v-if="!binanceStatus.connected">
+                                    Connect a read-only API key to pull your spot trades automatically, once a day or whenever you press Sync now.
+                                </div>
+                                <template v-else>
+                                    <div class="text-body-medium text-medium-emphasis">
+                                        Connected with the key ending {{ binanceStatus.apiKeyHint }} ·
+                                        <span v-if="binanceStatus.lastSyncTime">last synced {{ formatDateTime(binanceStatus.lastSyncTime) }}, {{ binanceStatus.lastSyncCreatedCount }} new trade{{ binanceStatus.lastSyncCreatedCount === 1 ? '' : 's' }}</span>
+                                        <span v-else>not synced yet</span>
+                                    </div>
+                                    <div class="text-body-medium text-warning" v-if="binanceStatus.lastSyncError">{{ binanceStatus.lastSyncError }}</div>
+                                </template>
+                            </div>
+                            <template v-if="!binanceStatus.connected">
+                                <v-btn variant="tonal" :disabled="syncing" @click="connectBinance">Connect Binance</v-btn>
+                            </template>
+                            <template v-else>
+                                <v-progress-circular indeterminate size="20" v-if="syncing"/>
+                                <v-btn variant="tonal" :prepend-icon="mdiSync" :disabled="syncing" @click="syncBinance">Sync now</v-btn>
+                                <v-btn variant="text" color="error" :disabled="syncing" @click="disconnectBinance">Disconnect</v-btn>
+                            </template>
+                        </v-card-text>
+                    </v-card>
+                </v-col>
+
+                <v-col cols="12">
+                    <v-card :class="{ disabled: loading }">
+                        <v-card-text class="d-flex align-center flex-wrap gap-4">
+                            <div class="text-body-medium text-medium-emphasis">{{ marketFilter ? ASSET_MARKET_NAMES[marketFilter] : 'All assets' }}</div>
+                            <v-spacer/>
+                            <v-switch hide-details density="compact" color="primary" label="Show sold positions" v-model="showSold"/>
+                        </v-card-text>
+
+                        <v-table class="asset-holding-table" hover>
+                            <thead>
+                                <tr>
+                                    <th>Asset</th>
+                                    <th class="text-end">Quantity</th>
+                                    <th class="text-end">Avg buy</th>
+                                    <th class="text-end">Price</th>
+                                    <th class="text-end">Value</th>
+                                    <th class="text-end">Profit</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <template :key="holdingKey(holding)" v-for="holding in visibleHoldings">
+                                    <tr class="cursor-pointer" @click="toggleExpanded(holding)">
+                                        <td>
+                                            <div class="d-flex align-center">
+                                                <v-icon size="18" class="me-2" :icon="isExpanded(holding) ? mdiChevronDown : mdiChevronRight"/>
+                                                <div>
+                                                    <div>
+                                                        <span class="font-weight-medium">{{ holding.symbol }}</span>
+                                                        <v-chip class="ms-2" size="x-small" variant="tonal" v-if="isHoldingSold(holding)">Sold</v-chip>
+                                                        <v-chip class="ms-2" size="x-small" variant="tonal" color="warning" v-if="holding.oversold">Check history</v-chip>
+                                                    </div>
+                                                    <div class="text-body-medium text-medium-emphasis">{{ ASSET_MARKET_NAMES[holding.market] }}</div>
+                                                </div>
+                                            </div>
+                                        </td>
+                                        <template v-if="isHoldingSold(holding)">
+                                            <td class="text-end text-medium-emphasis">—</td>
+                                            <td class="text-end text-medium-emphasis">—</td>
+                                            <td class="text-end text-medium-emphasis">—</td>
+                                            <td class="text-end text-medium-emphasis">—</td>
+                                        </template>
+                                        <template v-else>
+                                            <td class="text-end">{{ formatQuantity(holding.quantity) }}</td>
+                                            <td class="text-end">{{ formatPrice(holding.averageCost, holding.currency) }}</td>
+                                            <td class="text-end">
+                                                <div class="d-inline-flex align-center">
+                                                    <span v-if="holding.hasPrice">{{ formatPrice(holding.price, holding.priceCurrency || holding.currency) }}</span>
+                                                    <v-chip size="small" color="warning" variant="tonal" v-else>Set price</v-chip>
+                                                    <v-btn class="ms-1" density="compact" variant="text" size="small" :icon="mdiPencilOutline"
+                                                           aria-label="Set price" @click.stop="editPrice(holding)"/>
+                                                </div>
+                                                <div class="text-body-medium text-medium-emphasis" v-if="holding.hasPrice">{{ describePrice(holding) }}</div>
+                                            </td>
+                                            <td class="text-end">{{ holding.hasPrice ? formatPrice(holding.value, holding.priceCurrency || holding.currency, 0) : '—' }}</td>
+                                        </template>
+                                        <td class="text-end" :class="profitClass(holdingProfit(holding))">
+                                            <template v-if="isHoldingSold(holding) || holding.hasPrice">
+                                                <div>{{ formatPrice(holdingProfit(holding), holding.currency, 0, true) }}</div>
+                                                <div class="text-body-medium" v-if="getHoldingProfitRatio(holding) !== null">{{ formatRatio(getHoldingProfitRatio(holding)!) }}</div>
+                                            </template>
+                                            <span class="text-medium-emphasis" v-else>—</span>
+                                        </td>
+                                    </tr>
+                                    <tr class="asset-trade-rows" v-if="isExpanded(holding)">
+                                        <td colspan="6" class="pa-0">
+                                            <v-table density="compact" class="bg-transparent">
+                                                <tbody>
+                                                    <tr :key="trade.id" v-for="trade in tradesOf(holding)">
+                                                        <td class="ps-10">{{ formatDate(trade.tradeTime) }}</td>
+                                                        <td>{{ trade.side === AssetTradeSide.Buy ? 'Buy' : 'Sell' }}</td>
+                                                        <td class="text-end">{{ formatQuantity(trade.quantity) }} @ {{ formatPrice(trade.price, trade.currency) }}</td>
+                                                        <td class="text-end text-medium-emphasis">{{ trade.fee ? `fee ${formatPrice(trade.fee, trade.currency)}` : '' }}</td>
+                                                        <td class="text-end" :class="profitClass(trade.realizedProfit ?? 0)">
+                                                            {{ trade.realizedProfit !== undefined ? `realized ${formatPrice(trade.realizedProfit, trade.currency, 0, true)}` : '' }}
+                                                        </td>
+                                                        <td class="text-end">
+                                                            <v-btn density="compact" variant="text" size="small" :icon="mdiPencilOutline" aria-label="Edit trade" @click.stop="editTrade(trade)"/>
+                                                            <v-btn density="compact" variant="text" size="small" color="error" :icon="mdiDeleteOutline" aria-label="Delete trade" @click.stop="deleteTrade(trade)"/>
+                                                        </td>
+                                                    </tr>
+                                                </tbody>
+                                            </v-table>
+                                            <div class="px-4 py-2 text-body-medium text-medium-emphasis" v-if="holding.oversold">
+                                                Sells in this history add up to more than the buys. Earlier buys are probably missing, so profit here may be overstated.
+                                            </div>
+                                        </td>
+                                    </tr>
+                                </template>
+                                <tr v-if="!visibleHoldings.length">
+                                    <td colspan="6" class="text-center py-8">
+                                        <div class="text-h6" v-if="!allHoldings.length">Start tracking your assets</div>
+                                        <div class="text-medium-emphasis mb-4" v-if="!allHoldings.length">
+                                            Add a trade, import your DFM, ADX or Binance trades from a CSV, or add something like gold as a manual asset.
+                                        </div>
+                                        <div class="text-medium-emphasis" v-else>Nothing to show with these filters.</div>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </v-table>
+                    </v-card>
+                </v-col>
+            </v-row>
+
+            <v-dialog width="420" v-model="priceDialog.show">
+                <v-card class="dialog-layout-card">
+                    <v-toolbar color="primary">
+                        <v-toolbar-title>Set price of {{ priceDialog.symbol }}</v-toolbar-title>
+                    </v-toolbar>
+                    <v-card-text class="pa-4">
+                        <v-text-field type="number" min="0" step="any" autofocus label="Price per unit" :suffix="priceDialog.currency"
+                                      v-model="priceDialog.price" @keyup.enter="savePrice"/>
+                        <div class="text-body-medium text-medium-emphasis">
+                            This price is used until the next automatic refresh. ADX prices and manual assets are only changed by you.
+                        </div>
+                    </v-card-text>
+                    <v-card-actions class="px-4 pb-4">
+                        <v-spacer/>
+                        <v-btn color="gray" @click="priceDialog.show = false">Cancel</v-btn>
+                        <v-btn color="primary" @click="savePrice">Save price</v-btn>
+                    </v-card-actions>
+                </v-card>
+            </v-dialog>
+
+            <asset-trade-dialog ref="tradeDialog"/>
+            <asset-import-dialog ref="importDialog"/>
+            <asset-binance-dialog ref="binanceDialog"/>
+            <confirm-dialog ref="confirmDialog"/>
+            <snack-bar ref="snackbar"/>
+        </template>
+    </main-page-layout>
 </template>
 
 <script setup lang="ts">
@@ -272,7 +284,21 @@ import {
 } from '@/lib/asset.ts';
 import { parseBigDecimal } from '@/lib/numeral.ts';
 
-import { mdiChevronDown, mdiChevronRight, mdiDeleteOutline, mdiPencilOutline, mdiPlus, mdiRefresh, mdiSync, mdiUpload } from '@mdi/js';
+import {
+    mdiChevronDown,
+    mdiChevronRight,
+    mdiCurrencyBtc,
+    mdiDeleteOutline,
+    mdiDiamondStone,
+    mdiDomain,
+    mdiOfficeBuildingOutline,
+    mdiPencilOutline,
+    mdiPlus,
+    mdiRefresh,
+    mdiSync,
+    mdiUpload,
+    mdiWalletOutline
+} from '@mdi/js';
 
 type SnackBarType = InstanceType<typeof SnackBar>;
 type ConfirmDialogType = InstanceType<typeof ConfirmDialog>;
@@ -282,7 +308,13 @@ type BinanceDialogType = InstanceType<typeof AssetBinanceDialog>;
 
 const ALLOCATION_COLORS: Record<string, string> = { cash: '#8e8e93', stocks: '#5ac8fa', crypto: '#ff9500', other: '#af52de' };
 
-const filterMarkets = [AssetMarket.DFM, AssetMarket.ADX, AssetMarket.Crypto, AssetMarket.Manual];
+const marketNavItems: { name: string; value: AssetMarket | ''; icon: string }[] = [
+    { name: 'All assets', value: '', icon: mdiWalletOutline },
+    { name: ASSET_MARKET_NAMES[AssetMarket.DFM], value: AssetMarket.DFM, icon: mdiDomain },
+    { name: ASSET_MARKET_NAMES[AssetMarket.ADX], value: AssetMarket.ADX, icon: mdiOfficeBuildingOutline },
+    { name: ASSET_MARKET_NAMES[AssetMarket.Crypto], value: AssetMarket.Crypto, icon: mdiCurrencyBtc },
+    { name: ASSET_MARKET_NAMES[AssetMarket.Manual], value: AssetMarket.Manual, icon: mdiDiamondStone }
+];
 
 const accountsStore = useAccountsStore();
 const assetsStore = useAssetsStore();
