@@ -43,3 +43,27 @@ var ProcessBankMessageOutboxJob = &CronJob{
 		return api.BankMessages.ProcessOutbox(c)
 	},
 }
+
+// RefreshAssetPricesMidSessionJob represents the cron job which refreshes asset prices during the UAE trading day (06:00 server time, 10:00 UAE time when the server runs in UTC)
+var RefreshAssetPricesMidSessionJob = &CronJob{
+	Name:        "RefreshAssetPricesMidSession",
+	Description: "Refresh the prices of held assets during the UAE trading day.",
+	Period: CronJobFixedHourPeriod{
+		Hour: 6,
+	},
+	Run: func(c *core.CronContext) error {
+		return services.Assets.RefreshPricesOfAllUsers(c)
+	},
+}
+
+// RefreshAssetPricesAfterCloseJob represents the cron job which refreshes asset prices after the UAE markets close (11:00 server time, 15:00 UAE time when the server runs in UTC)
+var RefreshAssetPricesAfterCloseJob = &CronJob{
+	Name:        "RefreshAssetPricesAfterClose",
+	Description: "Refresh the prices of held assets after the UAE markets close.",
+	Period: CronJobFixedHourPeriod{
+		Hour: 11,
+	},
+	Run: func(c *core.CronContext) error {
+		return services.Assets.RefreshPricesOfAllUsers(c)
+	},
+}
