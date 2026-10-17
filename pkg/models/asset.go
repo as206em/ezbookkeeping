@@ -131,24 +131,25 @@ type AssetTradeImportResponse struct {
 
 // AssetHoldingInfoResponse represents one asset position calculated from all trades of the asset
 type AssetHoldingInfoResponse struct {
-	Market         AssetMarket `json:"market"`
-	Symbol         string      `json:"symbol"`
-	Currency       string      `json:"currency"`
-	Quantity       float64     `json:"quantity"`
-	AverageCost    float64     `json:"averageCost"`
-	CostBasis      float64     `json:"costBasis"`
-	TotalBought    float64     `json:"totalBought"`
-	RealizedProfit float64     `json:"realizedProfit"`
-	HasPrice       bool        `json:"hasPrice"`
-	Price          float64     `json:"price"`
-	PriceCurrency  string      `json:"priceCurrency,omitempty"`
-	PriceTime      int64       `json:"priceTime"`
-	PriceSource    string      `json:"priceSource,omitempty"`
-	Value          float64     `json:"value"`
-	UnrealizedGain float64     `json:"unrealizedProfit"`
-	TradeCount     int         `json:"tradeCount"`
-	LastTradeTime  int64       `json:"lastTradeTime"`
-	Oversold       bool        `json:"oversold"`
+	Market           AssetMarket `json:"market"`
+	Symbol           string      `json:"symbol"`
+	Currency         string      `json:"currency"`
+	Quantity         float64     `json:"quantity"`
+	AverageCost      float64     `json:"averageCost"`
+	CostBasis        float64     `json:"costBasis"`
+	TotalBought      float64     `json:"totalBought"`
+	RealizedProfit   float64     `json:"realizedProfit"`
+	HasPrice         bool        `json:"hasPrice"`
+	Price            float64     `json:"price"`
+	PriceCurrency    string      `json:"priceCurrency,omitempty"`
+	PriceTime        int64       `json:"priceTime"`
+	PriceUpdatedTime int64       `json:"priceUpdatedTime"`
+	PriceSource      string      `json:"priceSource,omitempty"`
+	Value            float64     `json:"value"`
+	UnrealizedGain   float64     `json:"unrealizedProfit"`
+	TradeCount       int         `json:"tradeCount"`
+	LastTradeTime    int64       `json:"lastTradeTime"`
+	Oversold         bool        `json:"oversold"`
 }
 
 // AssetPriceRefreshMarketResult represents the result of refreshing the prices of one market

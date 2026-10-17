@@ -60,6 +60,7 @@ export interface AssetHoldingInfoResponse {
     readonly price: number;
     readonly priceCurrency?: string;
     readonly priceTime: number;
+    readonly priceUpdatedTime: number; // unix seconds when the price was fetched or entered
     readonly priceSource?: string;
     readonly value: number;
     readonly unrealizedProfit: number;

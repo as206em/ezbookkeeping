@@ -121,7 +121,7 @@ func TestCalculateAssetPositions_ValueAndUnrealizedProfitUseLatestPrice(t *testi
 		newTestTrade(1, ASSET_MARKET_DFM, "EMAAR", ASSET_TRADE_SIDE_BUY, 1000, 10, 0, 100),
 	}
 	prices := map[AssetMarket]map[string]*AssetPrice{
-		ASSET_MARKET_DFM: {"EMAAR": {Market: ASSET_MARKET_DFM, Symbol: "EMAAR", Price: ScaleAssetNumber(11.46), Currency: "AED", PriceTime: 500, Source: "dfm.ae"}},
+		ASSET_MARKET_DFM: {"EMAAR": {Market: ASSET_MARKET_DFM, Symbol: "EMAAR", Price: ScaleAssetNumber(11.46), Currency: "AED", PriceTime: 500, Source: "dfm.ae", UpdatedUnixTime: 900}},
 	}
 
 	holding := holdingOf(CalculateAssetPositions(trades, prices), "EMAAR")
@@ -131,6 +131,7 @@ func TestCalculateAssetPositions_ValueAndUnrealizedProfitUseLatestPrice(t *testi
 	assert.InDelta(t, 1460.0, holding.UnrealizedGain, 1e-6)
 	assert.Equal(t, "dfm.ae", holding.PriceSource)
 	assert.Equal(t, int64(500), holding.PriceTime)
+	assert.Equal(t, int64(900), holding.PriceUpdatedTime, "when the price was fetched, as opposed to the trading day it is for")
 }
 
 func TestCalculateAssetPositions_SoldHoldingHasNoValue(t *testing.T) {

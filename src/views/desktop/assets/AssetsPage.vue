@@ -62,9 +62,24 @@
                             <div class="text-body-medium text-medium-emphasis mt-3" v-if="summary.incomplete">
                                 Some amounts could not be converted to {{ defaultCurrency }} because an exchange rate is missing, so totals are partial.
                             </div>
-                            <div class="text-body-medium text-medium-emphasis mt-3" v-if="lastPriceTime">
-                                Prices as of {{ formatDateTime(lastPriceTime) }}. DFM and crypto refresh automatically twice a day; ADX prices are set by hand.
+                            <div class="d-flex align-center text-body-medium mt-3"
+                                 :class="priceFreshness.staleAutomatic.length ? 'text-warning' : 'text-medium-emphasis'"
+                                 v-if="priceFreshness.lastRefreshTime || hasAutomaticPrices">
+                                <v-icon size="18" class="me-1" :icon="priceFreshness.staleAutomatic.length ? mdiAlertOutline : mdiCheckCircleOutline"/>
+                                <span v-if="priceFreshness.lastRefreshTime">
+                                    Prices refreshed {{ formatAssetAge(now - priceFreshness.lastRefreshTime) }} ({{ formatDateTime(priceFreshness.lastRefreshTime) }}).
+                                    DFM and crypto refresh automatically twice a day.
+                                </span>
+                                <span v-else>No automatic price yet. Press Refresh prices to fetch DFM and crypto prices.</span>
                             </div>
+                            <v-alert type="warning" variant="tonal" density="compact" class="mt-2" v-if="priceFreshness.staleAutomatic.length">
+                                Prices for {{ priceFreshness.staleAutomatic.join(', ') }} were last refreshed more than a day ago.
+                                Press Refresh prices. If it keeps failing, the price source may be down, and you can set the price by hand with the pencil next to it.
+                            </v-alert>
+                            <v-alert type="info" variant="tonal" density="compact" class="mt-2" v-if="priceFreshness.staleManual.length">
+                                Prices you set by hand are more than a day old: {{ priceFreshness.staleManual.join(', ') }}.
+                                There is no automatic source for them, update them with the pencil next to the price.
+                            </v-alert>
                         </v-card-text>
                     </v-card>
                 </v-col>
@@ -101,12 +116,22 @@
                                     Connect a read-only API key to pull your spot trades automatically, once a day or whenever you press Sync now.
                                 </div>
                                 <template v-else>
-                                    <div class="text-body-medium text-medium-emphasis">
-                                        Connected with the key ending {{ binanceStatus.apiKeyHint }} ·
-                                        <span v-if="binanceStatus.lastSyncTime">last synced {{ formatDateTime(binanceStatus.lastSyncTime) }}, {{ binanceStatus.lastSyncCreatedCount }} new trade{{ binanceStatus.lastSyncCreatedCount === 1 ? '' : 's' }}</span>
-                                        <span v-else>not synced yet</span>
+                                    <div class="text-body-medium text-medium-emphasis">Connected with the key ending {{ binanceStatus.apiKeyHint }}</div>
+                                    <div class="d-flex align-center text-body-medium" :class="binanceSyncState === 'ok' ? 'text-medium-emphasis' : 'text-warning'">
+                                        <v-icon size="18" class="me-1" :icon="binanceSyncState === 'ok' ? mdiCheckCircleOutline : mdiAlertOutline"/>
+                                        <span v-if="binanceSyncState === 'never-synced'">Not synced yet. Press Sync now.</span>
+                                        <span v-else-if="binanceSyncState === 'failed'">
+                                            Last attempt {{ formatAssetAge(now - binanceStatus.lastSyncTime) }} failed. {{ binanceStatus.lastSyncError }}
+                                        </span>
+                                        <span v-else-if="binanceSyncState === 'stale'">
+                                            Last synced {{ formatAssetAge(now - binanceStatus.lastSyncTime) }} ({{ formatDateTime(binanceStatus.lastSyncTime) }}).
+                                            It should sync every day, so something may be wrong. Press Sync now.
+                                        </span>
+                                        <span v-else>
+                                            Last synced {{ formatAssetAge(now - binanceStatus.lastSyncTime) }} ({{ formatDateTime(binanceStatus.lastSyncTime) }}),
+                                            {{ binanceStatus.lastSyncCreatedCount }} new trade{{ binanceStatus.lastSyncCreatedCount === 1 ? '' : 's' }}
+                                        </span>
                                     </div>
-                                    <div class="text-body-medium text-warning" v-if="binanceStatus.lastSyncError">{{ binanceStatus.lastSyncError }}</div>
                                 </template>
                             </div>
                             <template v-if="!binanceStatus.connected">
@@ -261,7 +286,7 @@ import AssetImportDialog from './AssetImportDialog.vue';
 import AssetBinanceDialog from './AssetBinanceDialog.vue';
 import AssetHistoryChart from '@/components/desktop/AssetHistoryChart.vue';
 
-import { ref, reactive, computed, onMounted, useTemplateRef } from 'vue';
+import { ref, reactive, computed, onMounted, onBeforeUnmount, useTemplateRef } from 'vue';
 
 import { useAccountsStore } from '@/stores/account.ts';
 import { useAssetsStore } from '@/stores/asset.ts';
@@ -276,6 +301,9 @@ import {
     buildAssetHistory,
     filterAssetHistoryByRange,
     filterHoldings,
+    formatAssetAge,
+    getAssetBinanceSyncState,
+    getAssetPriceFreshness,
     getAssetAllocation,
     getHoldingProfitRatio,
     getHoldingTotalProfit,
@@ -285,6 +313,8 @@ import {
 import { parseBigDecimal } from '@/lib/numeral.ts';
 
 import {
+    mdiAlertOutline,
+    mdiCheckCircleOutline,
     mdiChevronDown,
     mdiChevronRight,
     mdiCurrencyBtc,
@@ -368,7 +398,13 @@ const history = computed(() => buildAssetHistory(assetsStore.allSnapshots, toDef
 const historyIncomplete = computed<boolean>(() => history.value.incomplete);
 const historyPoints = computed(() => filterAssetHistoryByRange(history.value.points, historyRangeDays.value, new Date().toISOString().slice(0, 10)));
 
-const lastPriceTime = computed<number>(() => allHoldings.value.reduce((latest, holding) => holding.hasPrice && !isHoldingSold(holding) ? Math.max(latest, holding.priceTime) : latest, 0));
+// the current time in unix seconds, ticking every minute so "refreshed 5 minutes ago" and the stale warnings stay accurate
+const now = ref<number>(Math.floor(Date.now() / 1000));
+const clock = setInterval(() => { now.value = Math.floor(Date.now() / 1000); }, 60 * 1000);
+
+const priceFreshness = computed(() => getAssetPriceFreshness(allHoldings.value, now.value));
+const hasAutomaticPrices = computed<boolean>(() => allHoldings.value.some(holding => !isHoldingSold(holding) && (holding.market === AssetMarket.DFM || holding.market === AssetMarket.Crypto)));
+const binanceSyncState = computed(() => getAssetBinanceSyncState(binanceStatus.value, now.value));
 
 function holdingKey(holding: AssetHoldingInfoResponse): string {
     return `${holding.market}:${holding.symbol}`;
@@ -587,6 +623,7 @@ function refreshPrices(): void {
 }
 
 onMounted(load);
+onBeforeUnmount(() => clearInterval(clock));
 </script>
 
 <style>

@@ -1,10 +1,14 @@
 import { describe, expect, test } from 'vitest';
 
-import { AssetMarket, AssetTradeSide, type AssetHoldingInfoResponse, type AssetSnapshotInfoResponse } from '@/models/asset.ts';
+import { AssetMarket, AssetTradeSide, type AssetBinanceStatusResponse, type AssetHoldingInfoResponse, type AssetSnapshotInfoResponse } from '@/models/asset.ts';
 
 import {
     ASSET_TRADE_CSV_TEMPLATE,
+    ASSET_DATA_STALE_SECONDS,
     buildAssetHistory,
+    formatAssetAge,
+    getAssetBinanceSyncState,
+    getAssetPriceFreshness,
     filterAssetHistoryByRange,
     filterHoldings,
     getAssetAllocation,
@@ -159,7 +163,7 @@ describe('parseAssetTradeRows', () => {
 function holding(overrides: Partial<AssetHoldingInfoResponse>): AssetHoldingInfoResponse {
     return {
         market: AssetMarket.DFM, symbol: 'X', currency: 'AED', quantity: 10, averageCost: 1, costBasis: 10, totalBought: 10,
-        realizedProfit: 0, hasPrice: true, price: 2, priceCurrency: 'AED', priceTime: 0, value: 20, unrealizedProfit: 10,
+        realizedProfit: 0, hasPrice: true, price: 2, priceCurrency: 'AED', priceTime: 0, priceUpdatedTime: 0, value: 20, unrealizedProfit: 10,
         tradeCount: 1, lastTradeTime: 0, oversold: false, ...overrides
     };
 }
@@ -308,5 +312,82 @@ describe('getAssetAllocation', () => {
 
     test('is empty when there is nothing', () => {
         expect(getAssetAllocation([], 0, toAed)).toEqual([]);
+    });
+});
+
+describe('formatAssetAge', () => {
+    test('uses the largest whole unit', () => {
+        expect(formatAssetAge(5)).toBe('just now');
+        expect(formatAssetAge(60)).toBe('1 minute ago');
+        expect(formatAssetAge(59 * 60)).toBe('59 minutes ago');
+        expect(formatAssetAge(3600)).toBe('1 hour ago');
+        expect(formatAssetAge(5 * 3600 + 1800)).toBe('5 hours ago');
+        expect(formatAssetAge(86400)).toBe('1 day ago');
+        expect(formatAssetAge(3 * 86400 + 7200)).toBe('3 days ago');
+    });
+});
+
+describe('getAssetPriceFreshness', () => {
+    const NOW = 1_800_000_000;
+    const fetched = (hoursAgo: number) => NOW - hoursAgo * 3600;
+
+    test('reports the newest automatic refresh and no warnings when everything is recent', () => {
+        const result = getAssetPriceFreshness([
+            holding({ symbol: 'EMAAR', priceSource: 'dfm.ae', priceUpdatedTime: fetched(5) }),
+            holding({ symbol: 'BTC', market: AssetMarket.Crypto, priceSource: 'binance.com', priceUpdatedTime: fetched(2) })
+        ], NOW);
+
+        expect(result).toEqual({ lastRefreshTime: fetched(2), staleAutomatic: [], staleManual: [] });
+    });
+
+    test('flags automatic prices fetched more than a day ago, by fetch time and not trading day', () => {
+        const result = getAssetPriceFreshness([
+            holding({ symbol: 'EMAAR', priceSource: 'dfm.ae', priceTime: NOW - 3 * 86400, priceUpdatedTime: fetched(2) }),
+            holding({ symbol: 'ETH', market: AssetMarket.Crypto, priceSource: 'binance.com', priceUpdatedTime: fetched(30) })
+        ], NOW);
+
+        expect(result.staleAutomatic).toEqual(['ETH']);
+        expect(result.lastRefreshTime).toBe(fetched(2));
+    });
+
+    test('a day exactly is still fine', () => {
+        expect(getAssetPriceFreshness([holding({ priceSource: 'dfm.ae', priceUpdatedTime: NOW - ASSET_DATA_STALE_SECONDS })], NOW).staleAutomatic).toEqual([]);
+    });
+
+    test('flags prices set by hand but not the value of manual assets', () => {
+        const result = getAssetPriceFreshness([
+            holding({ symbol: 'ADNOCDIST', market: AssetMarket.ADX, priceSource: 'manual', priceUpdatedTime: fetched(50) }),
+            holding({ symbol: 'Gold', market: AssetMarket.Manual, priceSource: 'manual', priceUpdatedTime: fetched(5000) }),
+            holding({ symbol: 'FRESH', market: AssetMarket.ADX, priceSource: 'manual', priceUpdatedTime: fetched(1) })
+        ], NOW);
+
+        expect(result.staleManual).toEqual(['ADNOCDIST']);
+        expect(result.lastRefreshTime).toBeNull();
+    });
+
+    test('ignores sold and unpriced holdings', () => {
+        const result = getAssetPriceFreshness([
+            holding({ quantity: 0, priceSource: 'dfm.ae', priceUpdatedTime: 1 }),
+            holding({ hasPrice: false, priceSource: undefined, priceUpdatedTime: 0 })
+        ], NOW);
+
+        expect(result).toEqual({ lastRefreshTime: null, staleAutomatic: [], staleManual: [] });
+    });
+});
+
+describe('getAssetBinanceSyncState', () => {
+    const NOW = 1_800_000_000;
+    const status = (overrides: Partial<AssetBinanceStatusResponse>): AssetBinanceStatusResponse => ({ connected: true, lastSyncTime: NOW - 3600, lastSyncCreatedCount: 0, ...overrides });
+
+    test('covers each state', () => {
+        expect(getAssetBinanceSyncState({ connected: false, lastSyncTime: 0, lastSyncCreatedCount: 0 }, NOW)).toBe('not-connected');
+        expect(getAssetBinanceSyncState(status({ lastSyncTime: 0 }), NOW)).toBe('never-synced');
+        expect(getAssetBinanceSyncState(status({ lastSyncError: 'Binance rejected the API key' }), NOW)).toBe('failed');
+        expect(getAssetBinanceSyncState(status({ lastSyncTime: NOW - ASSET_DATA_STALE_SECONDS - 1 }), NOW)).toBe('stale');
+        expect(getAssetBinanceSyncState(status({}), NOW)).toBe('ok');
+    });
+
+    test('a failed sync outranks an old one', () => {
+        expect(getAssetBinanceSyncState(status({ lastSyncTime: NOW - 5 * 86400, lastSyncError: 'x' }), NOW)).toBe('failed');
     });
 });

@@ -112,6 +112,7 @@ func CalculateAssetPositions(trades []*AssetTrade, prices map[AssetMarket]map[st
 			holding.Price = UnscaleAssetNumber(price.Price)
 			holding.PriceCurrency = price.Currency
 			holding.PriceTime = price.PriceTime
+			holding.PriceUpdatedTime = price.UpdatedUnixTime
 			holding.PriceSource = price.Source
 
 			if position.quantity > 0 {

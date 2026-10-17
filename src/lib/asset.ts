@@ -1,4 +1,4 @@
-import { AssetMarket, AssetTradeSide, type AssetHoldingInfoResponse, type AssetSnapshotInfoResponse, type AssetTradeInput } from '@/models/asset.ts';
+import { AssetMarket, AssetTradeSide, type AssetBinanceStatusResponse, type AssetHoldingInfoResponse, type AssetSnapshotInfoResponse, type AssetTradeInput } from '@/models/asset.ts';
 
 export const ASSET_MARKET_NAMES: Record<AssetMarket, string> = {
     [AssetMarket.DFM]: 'DFM',
@@ -524,4 +524,78 @@ export function getAssetAllocation(holdings: AssetHoldingInfoResponse[], cash: n
     return (Object.keys(totals) as AssetAllocationKey[])
         .filter(key => totals[key] > 0)
         .map(key => ({ key, label: ALLOCATION_LABELS[key], value: totals[key], share: totals[key] / total }));
+}
+
+/** Data older than this is shown with a warning */
+export const ASSET_DATA_STALE_SECONDS = 24 * 60 * 60;
+
+/** Describes how long ago something happened, e.g. "just now", "5 minutes ago", "3 hours ago", "2 days ago". */
+export function formatAssetAge(seconds: number): string {
+    const plural = (count: number, unit: string): string => `${count} ${unit}${count === 1 ? '' : 's'} ago`;
+
+    if (seconds < 60) {
+        return 'just now';
+    } else if (seconds < 3600) {
+        return plural(Math.floor(seconds / 60), 'minute');
+    } else if (seconds < 86400) {
+        return plural(Math.floor(seconds / 3600), 'hour');
+    }
+
+    return plural(Math.floor(seconds / 86400), 'day');
+}
+
+export interface AssetPriceFreshness {
+    /** when the newest automatically fetched price of a held asset was fetched, null if none has been */
+    readonly lastRefreshTime: number | null;
+    /** held assets whose automatic price was last fetched more than a day ago */
+    readonly staleAutomatic: string[];
+    /** held assets priced by hand (not manual assets, whose value is expected to change rarely) not updated for more than a day */
+    readonly staleManual: string[];
+}
+
+/**
+ * Judges how fresh the prices of the held assets are by when they were fetched, not by the trading day they are for,
+ * so a Friday close read on Sunday is fine as long as it was fetched recently.
+ */
+export function getAssetPriceFreshness(holdings: AssetHoldingInfoResponse[], now: number): AssetPriceFreshness {
+    let lastRefreshTime: number | null = null;
+    const staleAutomatic: string[] = [];
+    const staleManual: string[] = [];
+
+    for (const holding of holdings) {
+        if (isHoldingSold(holding) || !holding.hasPrice) {
+            continue;
+        }
+
+        const age = now - holding.priceUpdatedTime;
+
+        if (holding.priceSource && holding.priceSource !== 'manual') {
+            lastRefreshTime = Math.max(lastRefreshTime ?? 0, holding.priceUpdatedTime);
+
+            if (age > ASSET_DATA_STALE_SECONDS) {
+                staleAutomatic.push(holding.symbol);
+            }
+        } else if (holding.market !== AssetMarket.Manual && age > ASSET_DATA_STALE_SECONDS) {
+            staleManual.push(holding.symbol);
+        }
+    }
+
+    return { lastRefreshTime, staleAutomatic, staleManual };
+}
+
+export type AssetBinanceSyncState = 'not-connected' | 'never-synced' | 'failed' | 'stale' | 'ok';
+
+/** Whether the Binance connection is healthy: a failed last sync, or no successful check for more than a day, needs attention. */
+export function getAssetBinanceSyncState(status: AssetBinanceStatusResponse, now: number): AssetBinanceSyncState {
+    if (!status.connected) {
+        return 'not-connected';
+    } else if (!status.lastSyncTime) {
+        return 'never-synced';
+    } else if (status.lastSyncError) {
+        return 'failed';
+    } else if (now - status.lastSyncTime > ASSET_DATA_STALE_SECONDS) {
+        return 'stale';
+    }
+
+    return 'ok';
 }
