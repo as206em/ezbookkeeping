@@ -4,7 +4,9 @@ import (
 	"encoding/json"
 	"os"
 
+	"github.com/mayswind/ezbookkeeping/pkg/assetprices"
 	"github.com/mayswind/ezbookkeeping/pkg/avatars"
+	"github.com/mayswind/ezbookkeeping/pkg/binance"
 	"github.com/mayswind/ezbookkeeping/pkg/core"
 	"github.com/mayswind/ezbookkeeping/pkg/datastore"
 	"github.com/mayswind/ezbookkeeping/pkg/duplicatechecker"
@@ -144,6 +146,9 @@ func initializeSystem(c *core.CliContext) (*settings.Config, error) {
 		}
 		return nil, err
 	}
+
+	assetprices.InitializePriceProviders(config)
+	binance.InitializeClient(config)
 
 	cfgJson, _ := json.Marshal(getConfigWithoutSensitiveData(config))
 
