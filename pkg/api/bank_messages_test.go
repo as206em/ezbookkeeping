@@ -250,3 +250,28 @@ func TestBankMessageDuplicateKeyNormalizesCaseAndWhitespace(t *testing.T) {
 	assert.Equal(t, bankMessageDuplicateKey("  Purchase   AT ADNOC "), bankMessageDuplicateKey("purchase at adnoc"))
 	assert.NotEqual(t, bankMessageDuplicateKey("purchase at adnoc"), bankMessageDuplicateKey("purchase at salik"))
 }
+
+func TestBankMessageCategoryLookupToleratesMangledSeparators(t *testing.T) {
+	categories := []*models.TransactionCategory{
+		{CategoryId: 1, Name: "Food & Drink", Type: models.CATEGORY_TYPE_EXPENSE, ParentCategoryId: models.LevelOneTransactionCategoryParentId},
+		{CategoryId: 2, Name: "Groceries", Type: models.CATEGORY_TYPE_EXPENSE, ParentCategoryId: 1},
+		{CategoryId: 3, Name: "Groceries", Type: models.CATEGORY_TYPE_EXPENSE, ParentCategoryId: 4},
+		{CategoryId: 4, Name: "Household", Type: models.CATEGORY_TYPE_EXPENSE, ParentCategoryId: models.LevelOneTransactionCategoryParentId},
+	}
+
+	_, lookup := bankMessageCategoryData(categories, nil)
+
+	for _, name := range []string{"Food & Drink > Groceries", "Food & Drink \u001e Groceries", "food & drink>groceries", " Food  &  Drink >  Groceries "} {
+		category, source := lookup.resolve("expense", name, "")
+		require.NotNil(t, category, name)
+		assert.Equal(t, int64(2), category.CategoryId, name)
+		assert.Equal(t, "ai", source)
+	}
+}
+
+func TestMarshalBankMessagePromptJsonDoesNotEscapeHtml(t *testing.T) {
+	data, err := marshalBankMessagePromptJson([]bankMessageCategoryPromptItem{{Name: "Food & Drink > Groceries"}})
+
+	require.NoError(t, err)
+	assert.Equal(t, `[{"name":"Food & Drink > Groceries"}]`, string(data))
+}
