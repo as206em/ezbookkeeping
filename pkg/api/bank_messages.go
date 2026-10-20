@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/mayswind/ezbookkeeping/pkg/core"
 	"github.com/mayswind/ezbookkeeping/pkg/errs"
@@ -415,12 +416,12 @@ func buildBankMessageRecognitionRequest(setting *models.BankMessageAutomationSet
 		return nil, errs.Or(err, errs.ErrOperationFailed)
 	}
 
-	expenseCategories, err := json.Marshal(categoryOptions["expense"])
+	expenseCategories, err := marshalBankMessagePromptJson(categoryOptions["expense"])
 	if err != nil {
 		return nil, errs.Or(err, errs.ErrOperationFailed)
 	}
 
-	incomeCategories, err := json.Marshal(categoryOptions["income"])
+	incomeCategories, err := marshalBankMessagePromptJson(categoryOptions["income"])
 	if err != nil {
 		return nil, errs.Or(err, errs.ErrOperationFailed)
 	}
@@ -447,6 +448,20 @@ func buildBankMessageRecognitionRequest(setting *models.BankMessageAutomationSet
 		UserPromptType:         data.LARGE_LANGUAGE_MODEL_REQUEST_PROMPT_TYPE_TEXT,
 		ResponseJsonObjectType: reflect.TypeOf(models.RecognizedBankMessage{}),
 	}, nil
+}
+
+// marshalBankMessagePromptJson encodes prompt data without HTML escaping, so category names such as
+// "Food > Groceries" reach the model literally instead of as "\u003e" escapes it may copy back corrupted
+func marshalBankMessagePromptJson(value any) ([]byte, error) {
+	var buffer bytes.Buffer
+	encoder := json.NewEncoder(&buffer)
+	encoder.SetEscapeHTML(false)
+
+	if err := encoder.Encode(value); err != nil {
+		return nil, err
+	}
+
+	return bytes.TrimSpace(buffer.Bytes()), nil
 }
 
 func (a *BankMessagesApi) identifyAccount(c core.Context, setting *models.BankMessageAutomationSetting, text string) (int64, *errs.Error) {
@@ -590,7 +605,27 @@ type bankMessageCategoryLookup struct {
 const bankMessageCategoryPathSeparator = " > "
 
 func bankMessageCategoryLookupKey(typeName string, value string) string {
-	return typeName + "\x00" + value
+	return typeName + "\x00" + normalizeBankMessageCategoryName(value)
+}
+
+// normalizeBankMessageCategoryName makes category matching tolerant of how the model writes the path:
+// letter case, spacing around the separator, and control characters left by a mangled "\u003e" escape
+func normalizeBankMessageCategoryName(value string) string {
+	value = strings.Map(func(r rune) rune {
+		if unicode.IsControl(r) {
+			return '>'
+		}
+
+		return r
+	}, value)
+
+	parts := strings.Split(value, ">")
+
+	for i, part := range parts {
+		parts[i] = strings.Join(strings.Fields(part), " ")
+	}
+
+	return strings.ToLower(strings.Join(parts, bankMessageCategoryPathSeparator))
 }
 
 func bankMessageCategoryTypeName(categoryType models.TransactionCategoryType) string {
