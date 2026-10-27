@@ -16,7 +16,6 @@ import HomePage from '@/views/desktop/HomePage.vue';
 import TransactionListPage from '@/views/desktop/transactions/ListPage.vue';
 
 import StatisticsTransactionPage from '@/views/desktop/statistics/TransactionPage.vue';
-import AssetsPage from '@/views/desktop/assets/AssetsPage.vue';
 import StatisticsBudgetPage from '@/views/desktop/statistics/BudgetPage.vue';
 
 import InsightsExplorerPage from '@/views/desktop/insights/ExplorerPage.vue';
@@ -150,11 +149,6 @@ const router = createRouter({
                 initTrendDateAggregationType: route.query['trendDateAggregationType'],
                 initAssetTrendsDateAggregationType: route.query['assetTrendsDateAggregationType']
             })
-        },
-        {
-            path: '/assets',
-            component: AssetsPage,
-            beforeEnter: checkLogin
         },
         {
             path: '/statistics/budget',

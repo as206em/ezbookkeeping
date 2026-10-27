@@ -52,6 +52,31 @@ func (s *DataStore) SyncStructs(beans ...any) error {
 	return err
 }
 
+// DropTablesIfExist drops the given tables in every database, skipping any that don't exist
+func (s *DataStore) DropTablesIfExist(tableNames ...string) error {
+	for i := 0; i < len(s.databases); i++ {
+		for _, tableName := range tableNames {
+			exists, err := s.databases[i].engineGroup.IsTableExist(tableName)
+
+			if err != nil {
+				return err
+			}
+
+			if !exists {
+				continue
+			}
+
+			err = s.databases[i].engineGroup.DropTables(tableName)
+
+			if err != nil {
+				return err
+			}
+		}
+	}
+
+	return nil
+}
+
 // NewDataStore returns a new data storage by a series of database
 func NewDataStore(databases ...*Database) (*DataStore, error) {
 	if len(databases) < 1 {

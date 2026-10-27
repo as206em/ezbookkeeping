@@ -64,16 +64,6 @@
                                     </v-btn>
                                 </router-link>
 
-                                <router-link to="/assets">
-                                    <v-btn class="top-navigation-button ms-1" density="comfortable" variant="text" :icon="true"
-                                           aria-label="Assets"
-                                           :active="isTopNavigationActive('/assets')"
-                                           :color="isTopNavigationActive('/assets') ? 'primary' : 'default'">
-                                        <v-icon :icon="isTopNavigationActive('/assets') ? mdiChartLine : mdiChartLineVariant" size="24" />
-                                        <v-tooltip activator="parent">Assets</v-tooltip>
-                                    </v-btn>
-                                </router-link>
-
                                 <router-link to="/statistics/budget">
                                     <v-btn class="top-navigation-button ms-1" density="comfortable" variant="text" :icon="true"
                                            aria-label="Budgets"
@@ -232,8 +222,6 @@ import {
     mdiChartPieOutline,
     mdiCompass,
     mdiCompassOutline,
-    mdiChartLine,
-    mdiChartLineVariant,
     mdiPiggyBank,
     mdiPiggyBankOutline,
     mdiPlus,
