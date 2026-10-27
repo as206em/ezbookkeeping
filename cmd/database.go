@@ -229,5 +229,14 @@ func updateAllDatabaseTablesStructure(c *core.CliContext) error {
 
 	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] insights explorer table maintained successfully")
 
+	// The assets feature was removed, so drop the tables it created
+	err = datastore.Container.UserDataStore.DropTablesIfExist("asset_trade", "asset_price", "asset_snapshot", "asset_binance_connection")
+
+	if err != nil {
+		return err
+	}
+
+	log.BootInfof(c, "[database.updateAllDatabaseTablesStructure] removed asset tables dropped successfully")
+
 	return nil
 }
