@@ -463,21 +463,6 @@ func startWebServer(c *core.CliContext) error {
 			apiV1Route.POST("/transaction/categories/merchants/add.json", bindApi(api.TransactionCategoryMerchants.MerchantAddHandler, config))
 			apiV1Route.POST("/transaction/categories/merchants/delete.json", bindApi(api.TransactionCategoryMerchants.MerchantDeleteHandler, config))
 
-			// Assets
-			apiV1Route.GET("/assets/trades/list.json", bindApi(api.Assets.TradeListHandler, config))
-			apiV1Route.POST("/assets/trades/add.json", bindApi(api.Assets.TradeAddHandler, config))
-			apiV1Route.POST("/assets/trades/modify.json", bindApi(api.Assets.TradeModifyHandler, config))
-			apiV1Route.POST("/assets/trades/delete.json", bindApi(api.Assets.TradeDeleteHandler, config))
-			apiV1Route.POST("/assets/trades/import.json", bindApi(api.Assets.TradeImportHandler, config))
-			apiV1Route.GET("/assets/holdings/list.json", bindApi(api.Assets.HoldingListHandler, config))
-			apiV1Route.POST("/assets/prices/set.json", bindApi(api.Assets.PriceSetHandler, config))
-			apiV1Route.POST("/assets/prices/refresh.json", bindApi(api.Assets.PriceRefreshHandler, config))
-			apiV1Route.GET("/assets/snapshots/list.json", bindApi(api.Assets.SnapshotListHandler, config))
-			apiV1Route.GET("/assets/binance/status.json", bindApi(api.Assets.BinanceStatusHandler, config))
-			apiV1Route.POST("/assets/binance/connect.json", bindApi(api.Assets.BinanceConnectHandler, config))
-			apiV1Route.POST("/assets/binance/sync.json", bindApi(api.Assets.BinanceSyncHandler, config))
-			apiV1Route.POST("/assets/binance/disconnect.json", bindApi(api.Assets.BinanceDisconnectHandler, config))
-
 			// Transaction Tag Groups
 			apiV1Route.GET("/transaction/tags/groups/list.json", bindApi(api.TransactionTagGroups.TagGroupListHandler, config))
 			apiV1Route.GET("/transaction/tags/groups/get.json", bindApi(api.TransactionTagGroups.TagGroupGetHandler, config))

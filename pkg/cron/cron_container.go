@@ -88,15 +88,6 @@ func (c *CronJobSchedulerContainer) registerAllJobs(ctx core.Context, config *se
 	if config.EnableCreateScheduledTransaction {
 		Container.registerIntervalJob(ctx, CreateScheduledTransactionJob)
 	}
-
-	if config.EnableRefreshAssetPrices {
-		Container.registerIntervalJob(ctx, RefreshAssetPricesMidSessionJob)
-		Container.registerIntervalJob(ctx, RefreshAssetPricesAfterCloseJob)
-	}
-
-	if config.EnableSyncBinanceTrades {
-		Container.registerIntervalJob(ctx, SyncBinanceTradesJob)
-	}
 }
 
 func (c *CronJobSchedulerContainer) registerIntervalJob(ctx core.Context, job *CronJob) {
